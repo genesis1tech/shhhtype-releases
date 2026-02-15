@@ -18,8 +18,8 @@ pub fn inject_via_clipboard(text: &str) -> Result<()> {
     // 2. Set our text to clipboard
     clipboard.set_text(text)?;
 
-    // 3. Small delay to ensure clipboard is ready
-    std::thread::sleep(std::time::Duration::from_millis(50));
+    // 3. Delay to ensure clipboard is ready and target app has focus
+    std::thread::sleep(std::time::Duration::from_millis(100));
 
     // 4. Simulate Cmd+V keystroke
     simulate_cmd_v()?;
@@ -55,9 +55,9 @@ fn simulate_cmd_v() -> Result<()> {
             .map_err(|_| anyhow::anyhow!("Failed to create key up event"))?;
         key_up.set_flags(CGEventFlags::CGEventFlagCommand);
 
-        key_down.post(core_graphics::event::CGEventTapLocation::HID);
+        key_down.post(core_graphics::event::CGEventTapLocation::AnnotatedSession);
         std::thread::sleep(std::time::Duration::from_millis(20));
-        key_up.post(core_graphics::event::CGEventTapLocation::HID);
+        key_up.post(core_graphics::event::CGEventTapLocation::AnnotatedSession);
     }
 
     Ok(())
