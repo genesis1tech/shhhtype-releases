@@ -42,7 +42,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             model_size: ModelSize::Base,
-            shortcut: "CmdOrCtrl+Shift+Space".to_string(),
+            shortcut: "CmdOrCtrl+Alt+V".to_string(),
             hotkey_mode: HotkeyMode::PushToTalk,
             injection_method: InjectionMethod::Clipboard,
             language: "en".to_string(),
