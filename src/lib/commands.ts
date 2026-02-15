@@ -50,6 +50,10 @@ export const updateDictionary = (entries: DictionaryEntry[]) =>
 export const checkPermissions = () =>
   invoke<PermissionStatus>("check_permissions");
 
+/** Request microphone permission (triggers macOS prompt) */
+export const requestMicrophonePermission = () =>
+  invoke<void>("request_microphone_permission");
+
 /** Get download status of all models */
 export const getModelStatus = () =>
   invoke<ModelStatus[]>("get_model_status");

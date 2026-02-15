@@ -17,6 +17,12 @@ pub fn do_start_recording(state: &Arc<AppState>) -> Result<(), String> {
         return Err("Already recording".into());
     }
 
+    // Check microphone permission before attempting to record
+    if !check_microphone_permission() {
+        log::error!("Microphone permission not granted — cannot record");
+        return Err("Microphone permission not granted. Enable it in System Settings > Privacy & Security > Microphone.".into());
+    }
+
     state.audio_buffer.lock().clear();
     state.audio_stop_flag.store(false, Ordering::Relaxed);
     state.set_state(STATE_RECORDING);
@@ -298,12 +304,42 @@ fn check_microphone_permission() -> bool {
             let audio_str: *const Object =
                 msg_send![ns_string_cls, stringWithUTF8String: b"soun\0".as_ptr()];
             let status: i64 = msg_send![cls, authorizationStatusForMediaType: audio_str];
+            // 0 = notDetermined, 1 = restricted, 2 = denied, 3 = authorized
             status == 3
         }
     }
     #[cfg(not(target_os = "macos"))]
     {
         false
+    }
+}
+
+#[tauri::command]
+pub fn request_microphone_permission() {
+    #[cfg(target_os = "macos")]
+    {
+        // Spawn a short-lived audio stream via cpal to trigger the macOS microphone permission prompt.
+        // This registers the app in System Settings > Privacy > Microphone.
+        std::thread::spawn(|| {
+            use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+            let host = cpal::default_host();
+            if let Some(device) = host.default_input_device() {
+                if let Ok(config) = device.default_input_config() {
+                    if let Ok(stream) = device.build_input_stream_raw(
+                        &config.into(),
+                        cpal::SampleFormat::F32,
+                        move |_data: &cpal::Data, _info: &cpal::InputCallbackInfo| {},
+                        move |err| { log::error!("Permission stream error: {}", err); },
+                        None,
+                    ) {
+                        let _ = stream.play();
+                        std::thread::sleep(std::time::Duration::from_millis(200));
+                        drop(stream);
+                    }
+                }
+            }
+            log::info!("Microphone permission request triggered");
+        });
     }
 }
 

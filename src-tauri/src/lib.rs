@@ -46,6 +46,7 @@ pub fn run() {
             commands::get_dictionary,
             commands::update_dictionary,
             commands::check_permissions,
+            commands::request_microphone_permission,
             commands::get_model_status,
             commands::download_model,
             commands::delete_model,
@@ -58,6 +59,9 @@ pub fn run() {
             let app_handle = app.handle().clone();
             let state = app_handle.state::<Arc<AppState>>();
             state.init_db()?;
+
+            // Request microphone permission on startup so the app appears in System Settings
+            commands::request_microphone_permission();
 
             // Create overlay window (hidden, transparent, click-through)
             let overlay = WebviewWindowBuilder::new(

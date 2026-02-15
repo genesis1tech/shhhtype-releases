@@ -8,6 +8,7 @@ import {
   downloadModel,
   deleteModel,
   checkPermissions,
+  requestMicrophonePermission,
 } from "../lib/commands";
 import type {
   DictionaryEntry,
@@ -155,10 +156,31 @@ export default function Settings() {
 /** Permission status banner - only shows when permissions are missing. */
 function PermissionBanner() {
   const [status, setStatus] = useState<PermStatus | null>(null);
+  const [requesting, setRequesting] = useState(false);
+
+  const refreshStatus = () => {
+    checkPermissions().then(setStatus).catch(console.error);
+  };
 
   useEffect(() => {
-    checkPermissions().then(setStatus).catch(console.error);
+    refreshStatus();
+    // Poll permissions every 2s to detect when user grants them in System Settings
+    const interval = setInterval(refreshStatus, 2000);
+    return () => clearInterval(interval);
   }, []);
+
+  const handleRequestMic = async () => {
+    setRequesting(true);
+    try {
+      await requestMicrophonePermission();
+      // Wait a moment for macOS to process, then refresh
+      setTimeout(refreshStatus, 1000);
+    } catch (e) {
+      console.error("Failed to request microphone permission:", e);
+    } finally {
+      setRequesting(false);
+    }
+  };
 
   if (!status) return null;
   if (status.microphone && status.accessibility) return null;
@@ -182,6 +204,15 @@ function PermissionBanner() {
           >
             Microphone: {status.microphone ? "Granted" : "Not Granted"}
           </span>
+          {!status.microphone && (
+            <button
+              onClick={handleRequestMic}
+              disabled={requesting}
+              className="ml-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-2 py-0.5 rounded text-xs"
+            >
+              {requesting ? "Requesting..." : "Grant Access"}
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <span
@@ -200,7 +231,7 @@ function PermissionBanner() {
         </div>
       </div>
       <p className="text-gray-400 text-xs">
-        Open System Settings &gt; Privacy &amp; Security to grant permissions.
+        Click "Grant Access" to trigger the permission prompt, or open System Settings &gt; Privacy &amp; Security manually.
       </p>
     </div>
   );
