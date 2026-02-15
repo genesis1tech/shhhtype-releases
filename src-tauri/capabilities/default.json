@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default capabilities for voice2txt",
+  "description": "Default capabilities for vox2txt",
   "windows": ["*"],
   "permissions": [
     "core:default",

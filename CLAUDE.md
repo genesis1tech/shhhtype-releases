@@ -1,4 +1,4 @@
-# voice2txt - Claude Code Guidelines
+# vox2txt - Claude Code Guidelines
 
 ## Project Overview
 
@@ -48,7 +48,7 @@ npm run tauri build        # Full production build
 
 - Tauri commands in `src-tauri/src/commands.rs`, invoked from `src/lib/commands.ts`
 - TypeScript types mirror Rust structs in `src/lib/types.ts`
-- Settings persisted as JSON in `~/Library/Application Support/com.g1tech.voice2txt/`
+- Settings persisted as JSON in `~/Library/Application Support/com.g1tech.vox2txt/`
 - SQLite database at same location for transcription history
 - All audio processing happens in Rust (no JS audio APIs)
 - Use `parking_lot::Mutex` and `RwLock` instead of std (no poisoning)

@@ -29,7 +29,7 @@ pub fn toggle_settings(app: &AppHandle) {
             "settings",
             WebviewUrl::App("index.html".into()),
         )
-        .title("voice2txt Settings")
+        .title("vox2txt Settings")
         .inner_size(700.0, 500.0)
         .resizable(true)
         .center()

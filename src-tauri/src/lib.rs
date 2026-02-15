@@ -91,11 +91,11 @@ pub fn run() {
             let shortcut_str = state.config.read().shortcut.clone();
             register_hotkey(app, &shortcut_str);
 
-            log::info!("voice2txt initialized successfully");
+            log::info!("vox2txt initialized successfully");
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("error while running voice2txt");
+        .expect("error while running vox2txt");
 }
 
 /// Register (or re-register) the global hotkey.
@@ -224,7 +224,7 @@ fn send_notification(app: &tauri::AppHandle, text: &str) {
     let _ = app
         .notification()
         .builder()
-        .title("voice2txt")
+        .title("vox2txt")
         .body(preview)
         .show();
 }

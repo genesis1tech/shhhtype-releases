@@ -51,7 +51,7 @@ export default function Settings() {
 
   return (
     <div className="settings-window min-h-screen p-6">
-      <h1 className="text-xl font-bold mb-6">voice2txt Settings</h1>
+      <h1 className="text-xl font-bold mb-6">vox2txt Settings</h1>
 
       {/* Permission status banner */}
       <PermissionBanner />
@@ -138,7 +138,7 @@ export default function Settings() {
 
         {activeTab === "about" && (
           <div className="space-y-2">
-            <p className="text-white font-medium">voice2txt v0.1.0</p>
+            <p className="text-white font-medium">vox2txt v0.1.0</p>
             <p className="text-gray-400 text-sm">
               Voice-to-text developer tool for macOS.
             </p>
