@@ -343,6 +343,30 @@ pub fn request_microphone_permission() {
     }
 }
 
+/// Request accessibility permission by showing the macOS system prompt.
+/// This uses AXIsProcessTrustedWithOptions with kAXTrustedCheckOptionPrompt=true,
+/// which shows a dialog directing the user to System Settings > Accessibility.
+pub fn request_accessibility_permission() {
+    #[cfg(target_os = "macos")]
+    {
+        use core_foundation::base::TCFType;
+        use core_foundation::boolean::CFBoolean;
+        use core_foundation::dictionary::CFDictionary;
+        use core_foundation::string::CFString;
+
+        extern "C" {
+            fn AXIsProcessTrustedWithOptions(options: core_foundation::base::CFTypeRef) -> bool;
+        }
+
+        let key = CFString::new("AXTrustedCheckOptionPrompt");
+        let value = CFBoolean::true_value();
+        let options = CFDictionary::from_CFType_pairs(&[(key.as_CFType(), value.as_CFType())]);
+
+        let trusted = unsafe { AXIsProcessTrustedWithOptions(options.as_CFTypeRef()) };
+        log::info!("Accessibility permission request triggered (currently trusted: {})", trusted);
+    }
+}
+
 fn check_accessibility_permission() -> bool {
     #[cfg(target_os = "macos")]
     {

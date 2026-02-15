@@ -60,8 +60,9 @@ pub fn run() {
             let state = app_handle.state::<Arc<AppState>>();
             state.init_db()?;
 
-            // Request microphone permission on startup so the app appears in System Settings
+            // Request permissions on startup so the app appears in System Settings
             commands::request_microphone_permission();
+            commands::request_accessibility_permission();
 
             // Create overlay window (hidden, transparent, click-through)
             let overlay = WebviewWindowBuilder::new(
