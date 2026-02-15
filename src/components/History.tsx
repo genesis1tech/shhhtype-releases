@@ -1,13 +1,34 @@
 import { useState } from "react";
 import { useHistory } from "../hooks/useHistory";
+import { exportHistory } from "../lib/commands";
 
-/** Searchable transcription history list. */
+/** Searchable transcription history list with export. */
 export default function History() {
   const [search, setSearch] = useState("");
   const { entries, loading, error, fetch, remove } = useHistory();
+  const [exporting, setExporting] = useState(false);
 
   const handleSearch = () => {
     fetch({ search: search || undefined, limit: 50 });
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const allEntries = await exportHistory();
+      const json = JSON.stringify(allEntries, null, 2);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `voice2txt-history-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("Export failed:", e);
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -27,6 +48,13 @@ export default function History() {
         >
           Search
         </button>
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded text-sm disabled:opacity-50"
+        >
+          {exporting ? "Exporting..." : "Export"}
+        </button>
       </div>
 
       {loading && <p className="text-gray-400 text-sm">Loading...</p>}
@@ -41,7 +69,8 @@ export default function History() {
             <div className="flex-1 min-w-0">
               <p className="text-white text-sm truncate">{entry.text}</p>
               <p className="text-gray-500 text-xs mt-1">
-                {entry.created_at} &middot; {entry.word_count} words &middot;{" "}
+                {new Date(entry.created_at).toLocaleString()} &middot;{" "}
+                {entry.word_count} words &middot;{" "}
                 {(entry.duration_ms / 1000).toFixed(1)}s
               </p>
             </div>

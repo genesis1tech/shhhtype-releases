@@ -4,6 +4,7 @@ mod config;
 mod db;
 mod hotkey;
 mod inject;
+mod sound;
 mod state;
 mod transcribe;
 mod tray;
@@ -26,6 +27,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
+        .plugin(tauri_plugin_notification::init())
         .manage(Arc::new(app_state))
         .invoke_handler(tauri::generate_handler![
             commands::start_recording,
@@ -36,9 +42,13 @@ pub fn run() {
             commands::update_settings,
             commands::get_history,
             commands::delete_history_entry,
+            commands::export_history,
             commands::get_dictionary,
             commands::update_dictionary,
             commands::check_permissions,
+            commands::get_model_status,
+            commands::download_model,
+            commands::delete_model,
         ])
         .setup(|app| {
             // Set up the system tray
@@ -79,80 +89,7 @@ pub fn run() {
 
             // Register global hotkey for recording
             let shortcut_str = state.config.read().shortcut.clone();
-            if let Err(e) = app.handle().global_shortcut().on_shortcut(
-                shortcut_str.as_str(),
-                |app_handle, _shortcut, event| {
-                    let state = app_handle.state::<Arc<AppState>>();
-                    let mode = state.config.read().hotkey_mode.clone();
-                    let is_recording = state.audio_thread.lock().is_some();
-
-                    let should_start = matches!(
-                        (&mode, &event.state, is_recording),
-                        (HotkeyMode::PushToTalk, ShortcutState::Pressed, false)
-                            | (HotkeyMode::Toggle, ShortcutState::Pressed, false)
-                    ) && state.get_state() == "idle";
-
-                    let should_stop = matches!(
-                        (&mode, &event.state, is_recording),
-                        (HotkeyMode::PushToTalk, ShortcutState::Released, true)
-                            | (HotkeyMode::Toggle, ShortcutState::Pressed, true)
-                    );
-
-                    if should_start {
-                        log::info!("Hotkey: starting recording");
-                        if let Err(e) = commands::do_start_recording(state.inner()) {
-                            log::error!("Hotkey start recording failed: {}", e);
-                        } else {
-                            let _ = app_handle.emit("recording-state-changed", "recording");
-                            if state.config.read().show_overlay {
-                                windows::show_overlay(app_handle);
-                            }
-                        }
-                    }
-
-                    if should_stop {
-                        log::info!("Hotkey: stopping recording, will transcribe and inject");
-                        let app = app_handle.clone();
-                        let state = Arc::clone(state.inner());
-                        std::thread::spawn(move || {
-                            let _ = app.emit("recording-state-changed", "transcribing");
-                            match commands::do_stop_and_transcribe(&state) {
-                                Ok(text)
-                                    if !text.is_empty() && text != "[BLANK_AUDIO]" =>
-                                {
-                                    let _ = app.emit("transcription-complete", &text);
-
-                                    // Save to history DB
-                                    save_to_history(&state, &text);
-
-                                    // Inject text into focused app
-                                    let method =
-                                        state.config.read().injection_method.clone();
-                                    let result = match method {
-                                        InjectionMethod::Clipboard => {
-                                            inject::clipboard::inject_via_clipboard(&text)
-                                        }
-                                        InjectionMethod::Keyboard => {
-                                            inject::keyboard::inject_via_keyboard(&text)
-                                        }
-                                    };
-                                    if let Err(e) = result {
-                                        log::error!("Text injection failed: {}", e);
-                                    }
-                                }
-                                Err(e) => log::error!("Transcription failed: {}", e),
-                                _ => {}
-                            }
-                            let _ = app.emit("recording-state-changed", "idle");
-                            windows::hide_overlay(&app);
-                        });
-                    }
-                },
-            ) {
-                log::error!("Failed to register hotkey '{}': {}", shortcut_str, e);
-            } else {
-                log::info!("Hotkey registered: {}", shortcut_str);
-            }
+            register_hotkey(app, &shortcut_str);
 
             log::info!("voice2txt initialized successfully");
             Ok(())
@@ -161,12 +98,108 @@ pub fn run() {
         .expect("error while running voice2txt");
 }
 
+/// Register (or re-register) the global hotkey.
+fn register_hotkey(app: &tauri::App, shortcut_str: &str) {
+    if let Err(e) = app.handle().global_shortcut().on_shortcut(
+        shortcut_str,
+        |app_handle, _shortcut, event| {
+            let state = app_handle.state::<Arc<AppState>>();
+            let mode = state.config.read().hotkey_mode.clone();
+            let is_recording = state.audio_thread.lock().is_some();
+
+            let should_start = matches!(
+                (&mode, &event.state, is_recording),
+                (HotkeyMode::PushToTalk, ShortcutState::Pressed, false)
+                    | (HotkeyMode::Toggle, ShortcutState::Pressed, false)
+            ) && state.get_state() == "idle";
+
+            let should_stop = matches!(
+                (&mode, &event.state, is_recording),
+                (HotkeyMode::PushToTalk, ShortcutState::Released, true)
+                    | (HotkeyMode::Toggle, ShortcutState::Pressed, true)
+            );
+
+            if should_start {
+                log::info!("Hotkey: starting recording");
+                if let Err(e) = commands::do_start_recording(state.inner()) {
+                    log::error!("Hotkey start recording failed: {}", e);
+                } else {
+                    let config = state.config.read();
+                    if config.sound_feedback {
+                        sound::play_start_sound();
+                    }
+                    let _ = app_handle.emit("recording-state-changed", "recording");
+                    if config.show_overlay {
+                        windows::show_overlay(app_handle);
+                    }
+                }
+            }
+
+            if should_stop {
+                log::info!("Hotkey: stopping recording, will transcribe and inject");
+                let app = app_handle.clone();
+                let state = Arc::clone(state.inner());
+                std::thread::spawn(move || {
+                    let duration_ms = commands::get_recording_duration_ms(&state);
+                    let _ = app.emit("recording-state-changed", "transcribing");
+                    match commands::do_stop_and_transcribe(&state) {
+                        Ok(text)
+                            if !text.is_empty() && text != "[BLANK_AUDIO]" =>
+                        {
+                            let config = state.config.read().clone();
+                            if config.sound_feedback {
+                                sound::play_stop_sound();
+                            }
+
+                            let _ = app.emit("transcription-complete", &text);
+
+                            // Save to history DB with actual duration
+                            save_to_history(&state, &text, duration_ms);
+
+                            // Send macOS notification
+                            send_notification(&app, &text);
+
+                            // Inject text into focused app
+                            let result = match config.injection_method {
+                                InjectionMethod::Clipboard => {
+                                    inject::clipboard::inject_via_clipboard(&text)
+                                }
+                                InjectionMethod::Keyboard => {
+                                    let res = inject::keyboard::inject_via_keyboard(&text);
+                                    // Auto-copy to clipboard when using keyboard injection
+                                    if config.auto_copy {
+                                        if let Err(e) = inject::clipboard::copy_to_clipboard(&text) {
+                                            log::error!("Auto-copy failed: {}", e);
+                                        }
+                                    }
+                                    res
+                                }
+                            };
+                            if let Err(e) = result {
+                                log::error!("Text injection failed: {}", e);
+                            }
+                        }
+                        Err(e) => log::error!("Transcription failed: {}", e),
+                        _ => {}
+                    }
+                    let _ = app.emit("recording-state-changed", "idle");
+                    windows::hide_overlay(&app);
+                });
+            }
+        },
+    ) {
+        log::error!("Failed to register hotkey '{}': {}", shortcut_str, e);
+    } else {
+        log::info!("Hotkey registered: {}", shortcut_str);
+    }
+}
+
 /// Save a transcription to the history database.
-fn save_to_history(state: &AppState, text: &str) {
+fn save_to_history(state: &AppState, text: &str, duration_ms: i64) {
     let entry = db::history::HistoryEntry {
         id: uuid::Uuid::new_v4().to_string(),
         text: text.to_string(),
-        duration_ms: 0,
+        duration_ms,
         model: format!("{:?}", state.config.read().model_size),
         created_at: chrono::Utc::now().to_rfc3339(),
         app_name: None,
@@ -178,4 +211,20 @@ fn save_to_history(state: &AppState, text: &str) {
             log::error!("Failed to save history: {}", e);
         }
     }
+}
+
+/// Send a macOS notification with transcription preview.
+fn send_notification(app: &tauri::AppHandle, text: &str) {
+    use tauri_plugin_notification::NotificationExt;
+    let preview = if text.len() > 80 {
+        format!("{}...", &text[..77])
+    } else {
+        text.to_string()
+    };
+    let _ = app
+        .notification()
+        .builder()
+        .title("voice2txt")
+        .body(preview)
+        .show();
 }

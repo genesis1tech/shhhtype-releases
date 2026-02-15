@@ -2,7 +2,7 @@ use anyhow::Result;
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
-    App, Manager,
+    App,
 };
 
 /// Create the system tray icon with context menu.

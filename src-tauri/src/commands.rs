@@ -4,9 +4,11 @@ use crate::config::settings::Settings;
 use crate::db::history::{HistoryEntry, HistoryQuery};
 use crate::state::{AppState, STATE_IDLE, STATE_RECORDING, STATE_TRANSCRIBING};
 use crate::transcribe::dictionary::DictionaryEntry;
-use crate::transcribe::model;
+use crate::transcribe::model::{self, ModelSize, ModelStatus};
+use crate::vad::energy::EnergyVad;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Instant;
 use tauri::{AppHandle, Emitter, State};
 
 /// Start audio capture. Shared by both the Tauri command and the hotkey handler.
@@ -18,14 +20,16 @@ pub fn do_start_recording(state: &Arc<AppState>) -> Result<(), String> {
     state.audio_buffer.lock().clear();
     state.audio_stop_flag.store(false, Ordering::Relaxed);
     state.set_state(STATE_RECORDING);
+    *state.recording_started_at.lock() = Some(Instant::now());
 
     let buffer = Arc::clone(&state.audio_buffer);
     let stop_flag = Arc::clone(&state.audio_stop_flag);
     let sample_rate_out = Arc::clone(&state.audio_sample_rate);
+    let vad_threshold = state.config.read().vad_threshold;
 
     let handle = std::thread::spawn(move || {
         let mut capture = AudioCapture::new();
-        if let Err(e) = capture.start(buffer) {
+        if let Err(e) = capture.start(buffer.clone()) {
             log::error!("Audio capture failed to start: {}", e);
             return;
         }
@@ -33,8 +37,30 @@ pub fn do_start_recording(state: &Arc<AppState>) -> Result<(), String> {
         sample_rate_out.store(capture.sample_rate(), Ordering::Relaxed);
         log::info!("Audio capture thread running at {}Hz", capture.sample_rate());
 
+        // VAD: auto-stop after ~1.5s of silence (30 frames * 50ms)
+        let mut vad = EnergyVad::new(vad_threshold, 30);
+        let mut has_speech = false;
+
         while !stop_flag.load(Ordering::Relaxed) {
             std::thread::sleep(std::time::Duration::from_millis(50));
+
+            // Check VAD on recent audio
+            let buf = buffer.lock();
+            let len = buf.len();
+            if len > 800 {
+                // Check last ~50ms of audio
+                let chunk_start = len.saturating_sub(800);
+                let chunk = &buf[chunk_start..len];
+                let is_speech = vad.is_speech(chunk);
+                if is_speech {
+                    has_speech = true;
+                }
+                // Only auto-stop if we've detected speech before (prevents stopping before user starts talking)
+                if has_speech && !is_speech {
+                    log::info!("VAD: silence detected, auto-stopping");
+                    stop_flag.store(true, Ordering::Relaxed);
+                }
+            }
         }
 
         capture.stop();
@@ -101,10 +127,11 @@ pub fn do_stop_and_transcribe(state: &Arc<AppState>) -> Result<String, String> {
         }
     }
 
+    let language = state.config.read().language.clone();
     let transcribed_text = state
         .whisper_engine
         .lock()
-        .transcribe(&samples_16k)
+        .transcribe(&samples_16k, &language)
         .map_err(|e| format!("Transcription failed: {}", e))?;
 
     let dict_path = state.data_dir.join("dictionary.json");
@@ -118,6 +145,15 @@ pub fn do_stop_and_transcribe(state: &Arc<AppState>) -> Result<String, String> {
     state.set_state(STATE_IDLE);
     log::info!("Transcription complete: {}", final_text);
     Ok(final_text)
+}
+
+/// Get recording duration in ms since start.
+pub fn get_recording_duration_ms(state: &AppState) -> i64 {
+    state
+        .recording_started_at
+        .lock()
+        .map(|started| started.elapsed().as_millis() as i64)
+        .unwrap_or(0)
 }
 
 #[tauri::command]
@@ -157,6 +193,7 @@ pub fn cancel_recording(
     }
     state.set_state(STATE_IDLE);
     state.audio_buffer.lock().clear();
+    *state.recording_started_at.lock() = None;
     let _ = app.emit("recording-state-changed", "idle");
     crate::windows::hide_overlay(&app);
     log::info!("Recording cancelled");
@@ -198,6 +235,21 @@ pub fn delete_history_entry(state: State<'_, Arc<AppState>>, id: String) -> Resu
 }
 
 #[tauri::command]
+pub fn export_history(state: State<'_, Arc<AppState>>) -> Result<Vec<HistoryEntry>, String> {
+    let db_lock = state.db.lock();
+    let conn = db_lock.as_ref().ok_or("Database not initialized")?;
+    crate::db::history::query(
+        conn,
+        &HistoryQuery {
+            search: None,
+            limit: Some(10000),
+            offset: Some(0),
+        },
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn get_dictionary(state: State<'_, Arc<AppState>>) -> Vec<DictionaryEntry> {
     let dict_path = state.data_dir.join("dictionary.json");
     crate::transcribe::dictionary::Dictionary::load(&dict_path)
@@ -217,10 +269,9 @@ pub fn update_dictionary(
 
 #[tauri::command]
 pub fn check_permissions() -> PermissionStatus {
-    // TODO: Check actual macOS permissions
     PermissionStatus {
-        microphone: false,
-        accessibility: false,
+        microphone: check_microphone_permission(),
+        accessibility: check_accessibility_permission(),
     }
 }
 
@@ -228,4 +279,74 @@ pub fn check_permissions() -> PermissionStatus {
 pub struct PermissionStatus {
     pub microphone: bool,
     pub accessibility: bool,
+}
+
+fn check_microphone_permission() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        use objc::runtime::{Class, Object};
+        use objc::{msg_send, sel, sel_impl};
+        unsafe {
+            let cls = match Class::get("AVCaptureDevice") {
+                Some(c) => c,
+                None => return false,
+            };
+            let ns_string_cls = match Class::get("NSString") {
+                Some(c) => c,
+                None => return false,
+            };
+            let audio_str: *const Object =
+                msg_send![ns_string_cls, stringWithUTF8String: b"soun\0".as_ptr()];
+            let status: i64 = msg_send![cls, authorizationStatusForMediaType: audio_str];
+            status == 3
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        false
+    }
+}
+
+fn check_accessibility_permission() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        extern "C" {
+            fn AXIsProcessTrusted() -> bool;
+        }
+        unsafe { AXIsProcessTrusted() }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        false
+    }
+}
+
+#[tauri::command]
+pub fn get_model_status(state: State<'_, Arc<AppState>>) -> Vec<ModelStatus> {
+    model::get_all_model_status(&state.data_dir)
+}
+
+#[tauri::command]
+pub async fn download_model(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+    model_size: ModelSize,
+) -> Result<(), String> {
+    let data_dir = state.data_dir.clone();
+    model::download_model(app, data_dir, model_size)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_model(
+    state: State<'_, Arc<AppState>>,
+    model_size: ModelSize,
+) -> Result<(), String> {
+    let path = model::model_path(&state.data_dir, &model_size);
+    if path.exists() {
+        std::fs::remove_file(&path).map_err(|e| e.to_string())?;
+        log::info!("Deleted model: {}", model_size.id());
+    }
+    Ok(())
 }

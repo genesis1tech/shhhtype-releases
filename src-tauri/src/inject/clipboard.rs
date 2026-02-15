@@ -1,5 +1,13 @@
 use anyhow::Result;
 
+/// Copy text to clipboard without pasting (for auto_copy feature).
+pub fn copy_to_clipboard(text: &str) -> Result<()> {
+    let mut clipboard = arboard::Clipboard::new()?;
+    clipboard.set_text(text)?;
+    log::info!("Copied {} chars to clipboard", text.len());
+    Ok(())
+}
+
 /// Inject text into the focused application via clipboard + Cmd+V.
 /// This is the most compatible method (works in ~98% of apps).
 pub fn inject_via_clipboard(text: &str) -> Result<()> {

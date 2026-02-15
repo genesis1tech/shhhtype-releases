@@ -17,6 +17,8 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-clipboard-manager = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-notification = "2"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -52,6 +54,10 @@ thiserror = "2"
 # Audio processing
 hound = "3.5"
 rubato = "0.16"
+
+# HTTP client for model downloads
+reqwest = { version = "0.12", features = ["stream"] }
+futures-util = "0.3"
 
 # Utilities
 chrono = { version = "0.4", features = ["serde"] }

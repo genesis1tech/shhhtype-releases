@@ -31,7 +31,7 @@ impl WhisperEngine {
     }
 
     /// Transcribe 16kHz mono f32 audio samples to text.
-    pub fn transcribe(&self, samples: &[f32]) -> Result<String> {
+    pub fn transcribe(&self, samples: &[f32], language: &str) -> Result<String> {
         let ctx = self
             .context
             .as_ref()
@@ -40,7 +40,7 @@ impl WhisperEngine {
         let mut state = ctx.create_state().map_err(|e| anyhow::anyhow!("Failed to create whisper state: {}", e))?;
 
         let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
-        params.set_language(Some("en"));
+        params.set_language(Some(language));
         params.set_print_progress(false);
         params.set_print_realtime(false);
         params.set_print_timestamps(false);

@@ -36,12 +36,49 @@ impl ModelSize {
             ModelSize::LargeV3Turbo => "Large V3 Turbo (1.6GB)",
         }
     }
+
+    /// Hugging Face download URL for this model.
+    pub fn download_url(&self) -> String {
+        format!(
+            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{}",
+            self.filename()
+        )
+    }
+
+    /// String identifier for events/serialization.
+    pub fn id(&self) -> &str {
+        match self {
+            ModelSize::Tiny => "Tiny",
+            ModelSize::Base => "Base",
+            ModelSize::Small => "Small",
+            ModelSize::Medium => "Medium",
+            ModelSize::LargeV3 => "LargeV3",
+            ModelSize::LargeV3Turbo => "LargeV3Turbo",
+        }
+    }
 }
 
 impl Default for ModelSize {
     fn default() -> Self {
         ModelSize::Base
     }
+}
+
+/// Status of a single model on disk.
+#[derive(serde::Serialize, Clone)]
+pub struct ModelStatus {
+    pub model: String,
+    pub downloaded: bool,
+    pub size_bytes: Option<u64>,
+}
+
+/// Download progress event payload.
+#[derive(serde::Serialize, Clone)]
+pub struct DownloadProgress {
+    pub model: String,
+    pub downloaded: u64,
+    pub total: u64,
+    pub percent: f64,
 }
 
 /// Resolve the full path for a model within the data directory.
@@ -74,4 +111,85 @@ pub fn list_downloaded_models(data_dir: &Path) -> Vec<ModelSize> {
     all.into_iter()
         .filter(|s| is_model_downloaded(data_dir, s))
         .collect()
+}
+
+/// Get download status of all models.
+pub fn get_all_model_status(data_dir: &Path) -> Vec<ModelStatus> {
+    let all = vec![
+        ModelSize::Tiny,
+        ModelSize::Base,
+        ModelSize::Small,
+        ModelSize::Medium,
+        ModelSize::LargeV3,
+        ModelSize::LargeV3Turbo,
+    ];
+    all.iter()
+        .map(|size| {
+            let path = model_path(data_dir, size);
+            let downloaded = path.exists();
+            let size_bytes = if downloaded {
+                std::fs::metadata(&path).ok().map(|m| m.len())
+            } else {
+                None
+            };
+            ModelStatus {
+                model: size.id().to_string(),
+                downloaded,
+                size_bytes,
+            }
+        })
+        .collect()
+}
+
+/// Download a model from Hugging Face with progress events.
+pub async fn download_model(
+    app: tauri::AppHandle,
+    data_dir: PathBuf,
+    size: ModelSize,
+) -> Result<()> {
+    use futures_util::StreamExt;
+    use tauri::Emitter;
+
+    ensure_models_dir(&data_dir)?;
+
+    let url = size.download_url();
+    let dest = model_path(&data_dir, &size);
+    let tmp_path = dest.with_extension("bin.tmp");
+
+    log::info!("Downloading model {} from {}", size.id(), url);
+
+    let response = reqwest::get(&url).await?;
+    let total = response.content_length().unwrap_or(0);
+
+    let mut file = tokio::fs::File::create(&tmp_path).await?;
+    let mut downloaded: u64 = 0;
+    let mut stream = response.bytes_stream();
+
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk?;
+        tokio::io::AsyncWriteExt::write_all(&mut file, &chunk).await?;
+        downloaded += chunk.len() as u64;
+
+        let percent = if total > 0 {
+            (downloaded as f64 / total as f64) * 100.0
+        } else {
+            0.0
+        };
+
+        let _ = app.emit(
+            "model-download-progress",
+            DownloadProgress {
+                model: size.id().to_string(),
+                downloaded,
+                total,
+                percent,
+            },
+        );
+    }
+
+    // Atomic rename from .tmp to final path
+    tokio::fs::rename(&tmp_path, &dest).await?;
+    log::info!("Model {} downloaded successfully", size.id());
+
+    Ok(())
 }

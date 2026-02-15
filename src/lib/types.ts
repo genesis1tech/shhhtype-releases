@@ -12,6 +12,7 @@ export interface Settings {
   vad_threshold: number;
   show_overlay: boolean;
   sound_feedback: boolean;
+  auto_launch: boolean;
 }
 
 export type ModelSize =
@@ -54,4 +55,19 @@ export interface DictionaryEntry {
 export interface PermissionStatus {
   microphone: boolean;
   accessibility: boolean;
+}
+
+/** Model download/availability status */
+export interface ModelStatus {
+  model: string;
+  downloaded: boolean;
+  size_bytes: number | null;
+}
+
+/** Model download progress event payload */
+export interface DownloadProgress {
+  model: string;
+  downloaded: number;
+  total: number;
+  percent: number;
 }

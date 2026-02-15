@@ -24,6 +24,9 @@ pub struct Settings {
     pub show_overlay: bool,
     /// Play sounds on start/stop recording.
     pub sound_feedback: bool,
+    /// Launch at login.
+    #[serde(default)]
+    pub auto_launch: bool,
 }
 
 /// How to inject transcribed text.
@@ -47,6 +50,7 @@ impl Default for Settings {
             vad_threshold: 0.01,
             show_overlay: true,
             sound_feedback: true,
+            auto_launch: false,
         }
     }
 }

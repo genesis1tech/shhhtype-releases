@@ -5,6 +5,7 @@ use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 
 /// Recording states
 pub const STATE_IDLE: u8 = 0;
@@ -22,6 +23,8 @@ pub struct AppState {
     pub db: Mutex<Option<Connection>>,
     pub config: RwLock<Settings>,
     pub data_dir: PathBuf,
+    /// When recording started, for duration tracking.
+    pub recording_started_at: Mutex<Option<Instant>>,
 }
 
 impl AppState {
@@ -44,6 +47,7 @@ impl AppState {
             db: Mutex::new(None),
             config: RwLock::new(config),
             data_dir,
+            recording_started_at: Mutex::new(None),
         }
     }
 

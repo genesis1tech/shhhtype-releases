@@ -6,6 +6,8 @@ import type {
   DictionaryEntry,
   PermissionStatus,
   RecordingState,
+  ModelStatus,
+  ModelSize,
 } from "./types";
 
 /** Start audio recording */
@@ -47,3 +49,19 @@ export const updateDictionary = (entries: DictionaryEntry[]) =>
 /** Check macOS permissions */
 export const checkPermissions = () =>
   invoke<PermissionStatus>("check_permissions");
+
+/** Get download status of all models */
+export const getModelStatus = () =>
+  invoke<ModelStatus[]>("get_model_status");
+
+/** Download a Whisper model from Hugging Face */
+export const downloadModel = (modelSize: ModelSize) =>
+  invoke<void>("download_model", { modelSize });
+
+/** Delete a downloaded model */
+export const deleteModel = (modelSize: ModelSize) =>
+  invoke<void>("delete_model", { modelSize });
+
+/** Export all history entries */
+export const exportHistory = () =>
+  invoke<HistoryEntry[]>("export_history");
