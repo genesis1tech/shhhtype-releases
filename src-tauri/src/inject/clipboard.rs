@@ -8,6 +8,15 @@ pub fn copy_to_clipboard(text: &str) -> Result<()> {
     Ok(())
 }
 
+/// Check if the process has Accessibility permission (needed for CGEvent).
+#[cfg(target_os = "macos")]
+fn is_accessibility_trusted() -> bool {
+    extern "C" {
+        fn AXIsProcessTrusted() -> bool;
+    }
+    unsafe { AXIsProcessTrusted() }
+}
+
 /// Inject text into the focused application via clipboard + Cmd+V.
 /// This is the most compatible method (works in ~98% of apps).
 pub fn inject_via_clipboard(text: &str) -> Result<()> {
@@ -18,13 +27,20 @@ pub fn inject_via_clipboard(text: &str) -> Result<()> {
     // 2. Set our text to clipboard
     clipboard.set_text(text)?;
 
-    // 3. Delay to ensure clipboard is ready and target app has focus
+    // 3. Check accessibility before attempting CGEvent
+    #[cfg(target_os = "macos")]
+    if !is_accessibility_trusted() {
+        log::warn!("Accessibility not trusted — text copied to clipboard but cannot simulate Cmd+V. Toggle Accessibility in System Settings.");
+        return Ok(());
+    }
+
+    // 4. Delay to ensure clipboard is ready and target app has focus
     std::thread::sleep(std::time::Duration::from_millis(100));
 
-    // 4. Simulate Cmd+V keystroke
+    // 5. Simulate Cmd+V keystroke
     simulate_cmd_v()?;
 
-    // 5. Wait for the target app to process the paste before restoring
+    // 6. Wait for the target app to process the paste before restoring
     std::thread::sleep(std::time::Duration::from_millis(500));
     let _ = clipboard.set_text(previous);
 

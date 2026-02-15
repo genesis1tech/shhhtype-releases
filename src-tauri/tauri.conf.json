@@ -27,8 +27,8 @@
       "icons/icon.ico"
     ],
     "macOS": {
-      "entitlements": null,
-      "signingIdentity": null
+      "entitlements": "Entitlements.plist",
+      "signingIdentity": "Vox2txt Dev"
     }
   }
 }
