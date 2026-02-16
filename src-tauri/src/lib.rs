@@ -83,6 +83,23 @@ pub fn run() {
 
             overlay.set_ignore_cursor_events(true)?;
 
+            // Set window to float above all windows, including full-screen apps
+            #[cfg(target_os = "macos")]
+            {
+                use cocoa::appkit::{NSWindow, NSWindowCollectionBehavior};
+                use cocoa::base::id;
+                let ns_window: id = overlay.ns_window().unwrap() as id;
+                unsafe {
+                    ns_window.setLevel_(1001);
+                    ns_window.setCollectionBehavior_(
+                        NSWindowCollectionBehavior::NSWindowCollectionBehaviorCanJoinAllSpaces
+                            | NSWindowCollectionBehavior::NSWindowCollectionBehaviorStationary
+                            | NSWindowCollectionBehavior::NSWindowCollectionBehaviorFullScreenAuxiliary
+                            | NSWindowCollectionBehavior::NSWindowCollectionBehaviorIgnoresCycle,
+                    );
+                }
+            }
+
             // Position top-center below menu bar
             if let Ok(Some(monitor)) = overlay.primary_monitor() {
                 let size = monitor.size();
