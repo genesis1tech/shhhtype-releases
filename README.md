@@ -6,9 +6,9 @@ All processing happens on-device via whisper.cpp with Metal GPU acceleration. No
 
 ## Features
 
-- **Global hotkey** (Cmd+Shift+Space) with push-to-talk or toggle modes
+- **Global hotkey** (Cmd+Alt+V) with push-to-talk or toggle modes
 - **Local Whisper transcription** with Metal GPU on Apple Silicon
-- **Text injection** via clipboard paste or character-by-character keyboard simulation
+- **Text injection** via clipboard paste into any app (terminals, IDEs, browsers)
 - **Voice Activity Detection** - auto-stops recording after silence
 - **Model management** - download Whisper models (Tiny to Large V3) from the Settings UI
 - **Custom dictionary** - correct terms Whisper frequently gets wrong
@@ -30,11 +30,14 @@ All processing happens on-device via whisper.cpp with Metal GPU acceleration. No
 
 ```bash
 # Clone the repository
-git clone https://github.com/genesis1tech/ts_vision.git
-cd ts_vision/vox2txt
+git clone https://github.com/genesis1tech/vox2txt.git
+cd vox2txt
 
 # Install frontend dependencies
 npm install
+
+# Setup code signing for development (one-time)
+./scripts/setup-dev-signing.sh
 ```
 
 ## Development
@@ -57,43 +60,23 @@ The built application will be in `src-tauri/target/release/bundle/`:
 - `macos/vox2txt.app` - The application bundle (drag to /Applications)
 - `dmg/vox2txt_0.1.0_aarch64.dmg` - Disk image installer for distribution
 
-## Installing on Other Macs
+## macOS Permissions
 
-**Option A: Share the `.dmg` (simplest)**
+vox2txt requires three macOS permissions:
 
-1. Build the app with `npm run tauri build`
-2. Send the `.dmg` file from `src-tauri/target/release/bundle/dmg/` to the other Mac
-3. Open the `.dmg`, drag `vox2txt.app` to `/Applications`
-4. On first launch, right-click > Open (since it's unsigned, macOS will warn about unidentified developer)
-5. Grant Microphone and Accessibility permissions when prompted
+| Permission | Purpose | How to Grant |
+|------------|---------|--------------|
+| **Microphone** | Audio capture for transcription | Prompted automatically on first use |
+| **Accessibility** | Simulate Cmd+V to paste text into apps | System Settings > Privacy & Security > Accessibility |
+| **Input Monitoring** | Global hotkey detection when app is not focused | System Settings > Privacy & Security > Input Monitoring |
 
-**Option B: Code-signed `.dmg` (no Gatekeeper warnings)**
-
-To distribute without the "unidentified developer" warning:
-
-1. Get an [Apple Developer ID](https://developer.apple.com/account/) ($99/year)
-2. Add your signing identity to `src-tauri/tauri.conf.json`:
-   ```json
-   "macOS": {
-     "signingIdentity": "Developer ID Application: Your Name (TEAM_ID)"
-   }
-   ```
-3. Build: `npm run tauri build`
-4. Notarize (required for macOS 10.15+):
-   ```bash
-   xcrun notarytool submit src-tauri/target/release/bundle/dmg/vox2txt_0.1.0_aarch64.dmg \
-     --apple-id your@email.com --team-id TEAM_ID --password app-specific-password --wait
-   xcrun stapler staple src-tauri/target/release/bundle/dmg/vox2txt_0.1.0_aarch64.dmg
-   ```
-5. The signed+notarized `.dmg` can be shared and opens without warnings
-
-**Note:** The build is architecture-specific. An Apple Silicon Mac produces an `aarch64` build. For Intel Macs, build on an Intel Mac or use `--target x86_64-apple-darwin`.
+The development signing certificate (`scripts/setup-dev-signing.sh`) ensures these permissions persist across rebuilds.
 
 ## First Launch
 
-1. **Grant permissions** - macOS will prompt for Microphone and Accessibility access. Both are required.
+1. **Grant permissions** - macOS will prompt for Microphone access. Enable Accessibility and Input Monitoring manually in System Settings.
 2. **Download a model** - Open Settings (tray icon > Settings), go to the General tab, select a model size, and click Download. Start with **Base (142MB)** for a good speed/accuracy balance.
-3. **Press the hotkey** - Default is `Cmd+Shift+Space`. Speak, then release (push-to-talk) or press again (toggle mode). Your transcription is typed into the focused app.
+3. **Press the hotkey** - Default is `Cmd+Alt+V`. Hold, speak, then release (push-to-talk) or press again (toggle mode). Your transcription is typed into the focused app.
 
 ## Configuration
 
@@ -121,7 +104,7 @@ Open Settings from the system tray menu. Available options:
 - **STT Engine**: whisper-rs (whisper.cpp bindings) with Metal GPU
 - **Audio**: cpal (capture), rubato (resampling)
 - **Database**: SQLite via rusqlite
-- **Text Injection**: Core Graphics CGEvent API
+- **Text Injection**: Core Graphics CGEvent API (AnnotatedSession tap)
 
 ## Data Storage
 
@@ -130,7 +113,7 @@ All data is stored locally at:
 ~/Library/Application Support/com.g1tech.vox2txt/
   settings.json      # User preferences
   dictionary.json    # Custom word corrections
-  vox2txt.db       # Transcription history (SQLite)
+  vox2txt.db         # Transcription history (SQLite)
   models/            # Downloaded Whisper model files
 ```
 
