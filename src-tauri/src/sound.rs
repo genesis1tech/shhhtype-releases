@@ -28,12 +28,12 @@ pub fn play_stop_sound() {
     unsafe {
         use objc::{class, msg_send, sel, sel_impl};
         use objc::runtime::Object;
-        let name_str: *mut Object = msg_send![class!(NSString), stringWithUTF8String: b"Ping\0".as_ptr()];
+        let name_str: *mut Object = msg_send![class!(NSString), stringWithUTF8String: b"Pop\0".as_ptr()];
         let sound: *mut Object = msg_send![class!(NSSound), soundNamed: name_str];
         if !sound.is_null() {
             let _: () = msg_send![sound, play];
         } else {
-            AudioServicesPlaySystemSound(1005);
+            AudioServicesPlaySystemSound(1057);
         }
     }
 }
