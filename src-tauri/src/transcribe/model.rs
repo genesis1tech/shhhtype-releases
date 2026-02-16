@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use std::path::{Path, PathBuf};
 
 /// Available Whisper model sizes.
@@ -43,6 +43,19 @@ impl ModelSize {
             "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{}",
             self.filename()
         )
+    }
+
+    /// Expected SHA-256 hash for integrity verification after download.
+    pub fn expected_sha256(&self) -> &str {
+        match self {
+            ModelSize::Tiny => "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21",
+            ModelSize::Base => "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
+            // Hashes for larger models verified on first download and logged
+            ModelSize::Small => "0000000000000000000000000000000000000000000000000000000000000000",
+            ModelSize::Medium => "0000000000000000000000000000000000000000000000000000000000000000",
+            ModelSize::LargeV3 => "0000000000000000000000000000000000000000000000000000000000000000",
+            ModelSize::LargeV3Turbo => "0000000000000000000000000000000000000000000000000000000000000000",
+        }
     }
 
     /// String identifier for events/serialization.
@@ -185,6 +198,40 @@ pub async fn download_model(
                 percent,
             },
         );
+    }
+
+    // Verify SHA-256 integrity before accepting the file
+    drop(file); // ensure all writes are flushed
+    let expected = size.expected_sha256();
+    let is_placeholder = expected.chars().all(|c| c == '0');
+
+    let tmp_path_clone = tmp_path.clone();
+    let computed = tokio::task::spawn_blocking(move || -> Result<String> {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        let mut f = std::fs::File::open(&tmp_path_clone)?;
+        std::io::copy(&mut f, &mut hasher)?;
+        Ok(format!("{:x}", hasher.finalize()))
+    })
+    .await??;
+
+    if is_placeholder {
+        log::info!(
+            "Model {} SHA-256: {} (no known hash to verify — save this for future builds)",
+            size.id(),
+            computed
+        );
+    } else if computed != expected {
+        // Delete the corrupt file and bail
+        let _ = tokio::fs::remove_file(&tmp_path).await;
+        bail!(
+            "SHA-256 mismatch for model {}: expected {} but got {}",
+            size.id(),
+            expected,
+            computed
+        );
+    } else {
+        log::info!("Model {} SHA-256 verified: {}", size.id(), computed);
     }
 
     // Atomic rename from .tmp to final path

@@ -20,6 +20,9 @@ echo "Creating self-signed code signing certificate: $CERT_NAME"
 TMP_DIR=$(mktemp -d)
 trap "rm -rf $TMP_DIR" EXIT
 
+# Generate a random password for the p12 package
+P12_PASS=$(openssl rand -base64 24)
+
 # 1. Generate key + self-signed cert (valid 10 years)
 openssl req -x509 -newkey rsa:2048 \
     -keyout "$TMP_DIR/dev.key" \
@@ -35,14 +38,14 @@ openssl pkcs12 -export \
     -out "$TMP_DIR/dev.p12" \
     -inkey "$TMP_DIR/dev.key" \
     -in "$TMP_DIR/dev.crt" \
-    -passout pass:vox2txt \
+    -passout "pass:$P12_PASS" \
     -legacy 2>/dev/null
 
 # 3. Import into login keychain
 security import "$TMP_DIR/dev.p12" \
     -k ~/Library/Keychains/login.keychain-db \
     -T /usr/bin/codesign \
-    -P "vox2txt"
+    -P "$P12_PASS"
 
 # 4. Trust the certificate for code signing (user level, no sudo needed)
 security add-trusted-cert -r trustRoot \
