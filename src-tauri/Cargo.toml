@@ -56,7 +56,7 @@ hound = "3.5"
 rubato = "0.16"
 
 # HTTP client for model downloads
-reqwest = { version = "0.12", features = ["stream"] }
+reqwest = { version = "0.12", features = ["stream", "blocking", "json", "multipart"] }
 futures-util = "0.3"
 
 # Integrity verification

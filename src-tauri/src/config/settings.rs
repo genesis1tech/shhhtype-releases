@@ -27,6 +27,22 @@ pub struct Settings {
     /// Launch at login.
     #[serde(default)]
     pub auto_launch: bool,
+    /// Where transcription runs: Local (on-device) or Groq (cloud API).
+    #[serde(default)]
+    pub transcription_backend: TranscriptionBackend,
+    /// Groq API key (only used when backend = Groq).
+    #[serde(default)]
+    pub groq_api_key: Option<String>,
+}
+
+/// Where transcription runs.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Default)]
+pub enum TranscriptionBackend {
+    /// Run Whisper locally on-device (default).
+    #[default]
+    Local,
+    /// Send audio to Groq's free Whisper API (whisper-large-v3-turbo).
+    Groq,
 }
 
 /// How to inject transcribed text.
@@ -51,6 +67,8 @@ impl Default for Settings {
             show_overlay: true,
             sound_feedback: true,
             auto_launch: false,
+            transcription_backend: TranscriptionBackend::Local,
+            groq_api_key: None,
         }
     }
 }

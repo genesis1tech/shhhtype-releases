@@ -14,6 +14,7 @@ import type {
   DictionaryEntry,
   ModelStatus,
   ModelSize,
+  TranscriptionBackend,
   DownloadProgress,
   PermissionStatus as PermStatus,
 } from "../lib/types";
@@ -353,10 +354,74 @@ function GeneralTab({
     { value: "LargeV3Turbo", label: "Large V3 Turbo (1.6GB)" },
   ];
 
+  const isGroq = settings.transcription_backend === "Groq";
+
   return (
     <div className="space-y-4">
-      {/* Model selector */}
+      {/* Transcription backend */}
       <div>
+        <label className="block text-sm text-gray-400 mb-1">
+          Transcription Backend
+        </label>
+        <select
+          value={settings.transcription_backend ?? "Local"}
+          onChange={(e) =>
+            save({
+              ...settings,
+              transcription_backend: e.target.value as TranscriptionBackend,
+            })
+          }
+          className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white"
+        >
+          <option value="Local">Local (on-device Whisper)</option>
+          <option value="Groq">Groq Cloud (whisper-large-v3-turbo, free)</option>
+        </select>
+        {isGroq && (
+          <p className="text-gray-500 text-xs mt-1">
+            Free tier: 8 hrs/day · Audio sent to Groq servers ·{" "}
+            <a
+              href="https://console.groq.com"
+              target="_blank"
+              rel="noreferrer"
+              className="text-blue-400 hover:underline"
+            >
+              Get API key
+            </a>
+          </p>
+        )}
+      </div>
+
+      {/* Groq API key (only when Groq selected) */}
+      {isGroq && (
+        <div>
+          <label className="block text-sm text-gray-400 mb-1">
+            Groq API Key
+          </label>
+          <input
+            type="password"
+            value={settings.groq_api_key ?? ""}
+            onChange={(e) =>
+              save({
+                ...settings,
+                groq_api_key: e.target.value || undefined,
+              })
+            }
+            placeholder="gsk_..."
+            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white font-mono text-sm placeholder-gray-600"
+          />
+          {!settings.groq_api_key && (
+            <p className="text-yellow-500 text-xs mt-1">
+              API key required to use Groq transcription.
+            </p>
+          )}
+          {settings.groq_api_key && (
+            <p className="text-green-400 text-xs mt-1">API key saved.</p>
+          )}
+        </div>
+      )}
+
+      {/* Model selector (Local only) */}
+      {!isGroq && <div>
         <label className="block text-sm text-gray-400 mb-1">
           Whisper Model
         </label>
@@ -430,7 +495,7 @@ function GeneralTab({
             </button>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Language */}
       <div>

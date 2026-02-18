@@ -13,6 +13,8 @@ export interface Settings {
   show_overlay: boolean;
   sound_feedback: boolean;
   auto_launch: boolean;
+  transcription_backend: TranscriptionBackend;
+  groq_api_key?: string;
 }
 
 export type ModelSize =
@@ -26,6 +28,8 @@ export type ModelSize =
 export type HotkeyMode = "PushToTalk" | "Toggle";
 
 export type InjectionMethod = "Clipboard" | "Keyboard";
+
+export type TranscriptionBackend = "Local" | "Groq";
 
 /** History entry matching Rust HistoryEntry struct */
 export interface HistoryEntry {

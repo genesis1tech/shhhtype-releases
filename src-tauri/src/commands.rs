@@ -1,6 +1,6 @@
 use crate::audio::capture::AudioCapture;
 use crate::audio::resampler::resample_to_16khz;
-use crate::config::settings::Settings;
+use crate::config::settings::{Settings, TranscriptionBackend};
 use crate::db::history::{HistoryEntry, HistoryQuery};
 use crate::state::{AppState, STATE_IDLE, STATE_RECORDING, STATE_TRANSCRIBING};
 use crate::transcribe::dictionary::DictionaryEntry;
@@ -114,31 +114,50 @@ pub fn do_stop_and_transcribe(state: &Arc<AppState>) -> Result<String, String> {
 
     log::info!("Resampled to {} samples at 16kHz", samples_16k.len());
 
-    {
-        let mut engine = state.whisper_engine.lock();
-        if !engine.is_loaded() {
-            let config = state.config.read();
-            let model_path = model::model_path(&state.data_dir, &config.model_size);
-            if !model_path.exists() {
-                state.set_state(STATE_IDLE);
-                return Err(format!(
-                    "Model not found: {}. Please download a model first.",
-                    model_path.display()
-                ));
-            }
-            log::info!("Loading whisper model: {}", model_path.display());
-            engine
-                .load_model(&model_path)
-                .map_err(|e| format!("Failed to load model: {}", e))?;
-        }
-    }
+    let (language, backend, groq_key) = {
+        let cfg = state.config.read();
+        (
+            cfg.language.clone(),
+            cfg.transcription_backend.clone(),
+            cfg.groq_api_key.clone(),
+        )
+    };
 
-    let language = state.config.read().language.clone();
-    let transcribed_text = state
-        .whisper_engine
-        .lock()
-        .transcribe(&samples_16k, &language)
-        .map_err(|e| format!("Transcription failed: {}", e))?;
+    let transcribed_text = match backend {
+        TranscriptionBackend::Local => {
+            {
+                let mut engine = state.whisper_engine.lock();
+                if !engine.is_loaded() {
+                    let config = state.config.read();
+                    let model_path = model::model_path(&state.data_dir, &config.model_size);
+                    if !model_path.exists() {
+                        state.set_state(STATE_IDLE);
+                        return Err(format!(
+                            "Model not found: {}. Please download a model first.",
+                            model_path.display()
+                        ));
+                    }
+                    log::info!("Loading whisper model: {}", model_path.display());
+                    engine
+                        .load_model(&model_path)
+                        .map_err(|e| format!("Failed to load model: {}", e))?;
+                }
+            }
+            state
+                .whisper_engine
+                .lock()
+                .transcribe(&samples_16k, &language)
+                .map_err(|e| format!("Transcription failed: {}", e))?
+        }
+        TranscriptionBackend::Groq => {
+            let api_key = groq_key.ok_or_else(|| {
+                "Groq API key not configured. Please add it in Settings.".to_string()
+            })?;
+            log::info!("Transcribing via Groq API (whisper-large-v3-turbo)...");
+            crate::transcribe::groq::transcribe(&samples_16k, &language, &api_key)
+                .map_err(|e| format!("Groq transcription failed: {}", e))?
+        }
+    };
 
     let dict_path = state.data_dir.join("dictionary.json");
     let final_text = if let Ok(dict) = crate::transcribe::dictionary::Dictionary::load(&dict_path)
