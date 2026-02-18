@@ -15,6 +15,7 @@ export interface Settings {
   auto_launch: boolean;
   transcription_backend: TranscriptionBackend;
   groq_api_key?: string;
+  vad_silence_secs: number;
 }
 
 export type ModelSize =

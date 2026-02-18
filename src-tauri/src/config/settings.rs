@@ -33,6 +33,13 @@ pub struct Settings {
     /// Groq API key (only used when backend = Groq).
     #[serde(default)]
     pub groq_api_key: Option<String>,
+    /// Seconds of silence before auto-stopping recording (VAD).
+    #[serde(default = "default_vad_silence_secs")]
+    pub vad_silence_secs: f32,
+}
+
+fn default_vad_silence_secs() -> f32 {
+    15.0
 }
 
 /// Where transcription runs.
@@ -69,6 +76,7 @@ impl Default for Settings {
             auto_launch: false,
             transcription_backend: TranscriptionBackend::Local,
             groq_api_key: None,
+            vad_silence_secs: 15.0,
         }
     }
 }

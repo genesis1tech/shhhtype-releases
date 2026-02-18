@@ -32,6 +32,8 @@ pub fn do_start_recording(state: &Arc<AppState>) -> Result<(), String> {
     let stop_flag = Arc::clone(&state.audio_stop_flag);
     let sample_rate_out = Arc::clone(&state.audio_sample_rate);
     let vad_threshold = state.config.read().vad_threshold;
+    // Each VAD frame = 50ms; convert seconds → frame count
+    let vad_silence_frames = (state.config.read().vad_silence_secs * 1000.0 / 50.0) as usize;
 
     let handle = std::thread::spawn(move || {
         let mut capture = AudioCapture::new();
@@ -43,8 +45,8 @@ pub fn do_start_recording(state: &Arc<AppState>) -> Result<(), String> {
         sample_rate_out.store(capture.sample_rate(), Ordering::Relaxed);
         log::info!("Audio capture thread running at {}Hz", capture.sample_rate());
 
-        // VAD: auto-stop after ~1.5s of silence (30 frames * 50ms)
-        let mut vad = EnergyVad::new(vad_threshold, 30);
+        let mut vad = EnergyVad::new(vad_threshold, vad_silence_frames);
+        log::info!("VAD silence timeout: {}ms ({} frames)", vad_silence_frames * 50, vad_silence_frames);
         let mut has_speech = false;
 
         while !stop_flag.load(Ordering::Relaxed) {

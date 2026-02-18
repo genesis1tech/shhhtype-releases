@@ -105,6 +105,28 @@ export default function Settings() {
                 Lower = more sensitive, higher = ignores quiet sounds
               </p>
             </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-2">
+                Silence Timeout: {settings.vad_silence_secs.toFixed(0)}s
+              </label>
+              <input
+                type="range"
+                min="3"
+                max="30"
+                step="1"
+                value={settings.vad_silence_secs}
+                onChange={(e) =>
+                  save({
+                    ...settings,
+                    vad_silence_secs: parseFloat(e.target.value),
+                  })
+                }
+                className="w-full accent-blue-500"
+              />
+              <p className="text-gray-500 text-xs mt-1">
+                How long to wait after you stop speaking before auto-stopping (3–30s)
+              </p>
+            </div>
             <label className="flex items-center gap-3 cursor-pointer">
               <input
                 type="checkbox"
