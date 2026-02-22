@@ -1,74 +1,64 @@
-# vox2txt - Claude Code Guidelines
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
-macOS menu bar voice-to-text tool for developers. Captures speech via global hotkey and injects transcribed text into any focused application (IDEs, terminals, browsers).
-
-## Tech Stack
-
-- **Framework:** Tauri v2 (Rust backend) + React 19 + TypeScript + Tailwind CSS v4 + Vite 7
-- **STT:** whisper-rs (Rust bindings for whisper.cpp) with Metal GPU acceleration
-- **Audio:** cpal crate for microphone capture
-- **Text Injection:** arboard (clipboard) + core-graphics (CGEvent Cmd+V simulation)
-- **Storage:** rusqlite with bundled SQLite
-- **Hotkeys:** tauri-plugin-global-shortcut
-
-## Architecture
-
-```
-Menu Bar Tray App (no main window)
-├── Global Hotkey (push-to-talk / toggle)
-├── Audio Pipeline (Rust): cpal → resample 16kHz → VAD → buffer
-├── Transcription (Rust): whisper-rs + Metal GPU → dictionary corrections
-├── Text Injection (Rust): clipboard paste or keyboard simulation
-├── Overlay Window (React): transparent floating pill with status
-└── Settings Window (React): tabbed config panel
-```
-
-## Key Directories
-
-- `src-tauri/src/` - Rust backend (modules: audio, transcribe, inject, hotkey, vad, config, db, tray)
-- `src/` - React frontend (components, hooks, lib)
-- `src-tauri/resources/` - Default dictionary JSON
+macOS menu bar voice-to-text tool for developers. Captures speech via global hotkey and injects transcribed text into any focused application (IDEs, terminals, browsers). All transcription runs on-device via whisper.cpp with Metal GPU acceleration (or optionally via Groq cloud API).
 
 ## Commands
 
 ```bash
-# Development
-npm run tauri dev          # Run in dev mode (frontend + Rust)
-npx vite build             # Build frontend only
-cargo check --manifest-path src-tauri/Cargo.toml  # Check Rust only
-cargo build --manifest-path src-tauri/Cargo.toml  # Build Rust only
+# Development (launches Vite dev server + Rust backend together)
+RUST_LOG=info npm run tauri dev
 
-# Production
-npm run tauri build        # Full production build
+# Check/build Rust only (faster iteration on backend changes)
+cargo check --manifest-path src-tauri/Cargo.toml
+cargo build --manifest-path src-tauri/Cargo.toml
+
+# Build frontend only
+npx vite build
+
+# Production build (.app bundle + .dmg installer)
+npm run tauri build
+# Output: src-tauri/target/release/bundle/macos/vox2txt.app
+
+# Code signing setup (one-time, required for macOS permissions to persist across rebuilds)
+./scripts/setup-dev-signing.sh
 ```
 
-## Conventions
+No test suite exists yet. There is no linter configured.
 
-- Tauri commands in `src-tauri/src/commands.rs`, invoked from `src/lib/commands.ts`
-- TypeScript types mirror Rust structs in `src/lib/types.ts`
-- Settings persisted as JSON in `~/Library/Application Support/com.g1tech.vox2txt/`
-- SQLite database at same location for transcription history
-- All audio processing happens in Rust (no JS audio APIs)
-- Use `parking_lot::Mutex` and `RwLock` instead of std (no poisoning)
-- Tray-only app: `tauri.conf.json` has empty `windows: []`, windows created dynamically
+## Architecture
 
-## Implementation Status
+Tray-only app: `tauri.conf.json` has `windows: []` — no main window. Windows are created dynamically in `src-tauri/src/windows.rs`.
 
-- Phase 1 (Skeleton): Complete - tray icon, module structure, compiles
-- Phase 2 (Audio Capture): Stubs ready, cpal capture implemented
-- Phase 3 (Transcription): Stubs ready, whisper-rs dependency added
-- Phase 4 (Text Injection): Stubs ready, CGEvent code written
-- Phase 5 (Hotkeys): Stub ready
-- Phase 6 (Frontend UI): Component stubs created
-- Phase 7 (Persistence): SQLite schema and CRUD implemented
-- Phase 8 (Polish): Pending
+**Single React entry point, multi-window routing:** `src/App.tsx` reads `getCurrentWindow().label` and renders either `<Overlay />` (label="overlay") or `<Settings />` (default). Both windows load the same `index.html`.
 
-## Important Notes
+**Recording flow (hotkey-driven, all in Rust):**
+1. Global hotkey registered in `lib.rs::register_hotkey()` — supports PushToTalk and Toggle modes
+2. `commands::do_start_recording()` spawns an audio capture thread (`audio::capture`) with VAD monitoring (`vad::energy`)
+3. VAD auto-stops after configurable silence timeout, or user releases/re-presses hotkey
+4. `commands::do_stop_and_transcribe()` resamples audio to 16kHz (`audio::resampler`), runs Whisper inference (`transcribe::engine`) or Groq API (`transcribe::groq`), applies dictionary corrections (`transcribe::dictionary`)
+5. Text injected into focused app via clipboard paste (`inject::clipboard`) or keyboard simulation (`inject::keyboard`)
 
-- Requires macOS Accessibility permission for text injection
-- Requires Microphone permission for audio capture
-- whisper-rs needs cmake installed for building whisper-sys
-- Metal feature flag enables M-series GPU acceleration
-- `macOSPrivateApi: true` in tauri.conf.json enables transparent overlay windows
+**State management:** `state::AppState` is a single struct with `parking_lot` locks, managed as `Arc<AppState>` by Tauri. Recording state tracked via `AtomicU8` (idle/recording/transcribing).
+
+**Frontend-backend bridge:** Tauri commands defined in `src-tauri/src/commands.rs`, TypeScript wrappers in `src/lib/commands.ts`, shared types in `src/lib/types.ts`. Events emitted via `app.emit()`: `recording-state-changed`, `transcription-complete`, `model-download-progress`.
+
+## Key Conventions
+
+- Use `parking_lot::Mutex` and `RwLock` (not std) — no poisoning
+- Tauri commands are the only Rust<->JS interface; all audio processing stays in Rust
+- Settings persisted as JSON, history in SQLite, both at `~/Library/Application Support/com.g1tech.vox2txt/`
+- Whisper models downloaded to `{data_dir}/models/` with SHA-256 verification
+- `macOSPrivateApi: true` enables transparent overlay windows
+- Overlay window uses NSWindow level 1001 (above screensaver) to float over everything including full-screen apps
+- CSP configured in `tauri.conf.json` — `connect-src` must include any new external API domains
+
+## Platform Requirements
+
+- macOS only (Apple Silicon recommended for Metal GPU)
+- Requires Microphone, Accessibility, and Input Monitoring permissions
+- whisper-rs build needs cmake (`brew install cmake`)
+- Code signing via `scripts/setup-dev-signing.sh` so permissions persist across dev rebuilds

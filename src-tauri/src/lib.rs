@@ -75,7 +75,8 @@ pub fn run() {
             .resizable(false)
             .decorations(false)
             .transparent(true)
-            .always_on_top(true)
+            // NOTE: do NOT use .always_on_top(true) — it sets a low Tauri-managed
+            // window level that conflicts with our manual setLevel_ for full-screen overlay.
             .skip_taskbar(true)
             .visible(false)
             .focused(false)
@@ -83,20 +84,14 @@ pub fn run() {
 
             overlay.set_ignore_cursor_events(true)?;
 
-            // Set window to float above all windows, including full-screen apps
+            // Swizzle the overlay NSWindow to NSPanel so it can appear over
+            // full-screen apps. Only NSPanel is allowed in full-screen Spaces.
             #[cfg(target_os = "macos")]
             {
-                use cocoa::appkit::{NSWindow, NSWindowCollectionBehavior};
                 use cocoa::base::id;
                 let ns_window: id = overlay.ns_window().unwrap() as id;
                 unsafe {
-                    ns_window.setLevel_(1001);
-                    ns_window.setCollectionBehavior_(
-                        NSWindowCollectionBehavior::NSWindowCollectionBehaviorCanJoinAllSpaces
-                            | NSWindowCollectionBehavior::NSWindowCollectionBehaviorStationary
-                            | NSWindowCollectionBehavior::NSWindowCollectionBehaviorFullScreenAuxiliary
-                            | NSWindowCollectionBehavior::NSWindowCollectionBehaviorIgnoresCycle,
-                    );
+                    windows::swizzle_to_nspanel(ns_window);
                 }
             }
 
