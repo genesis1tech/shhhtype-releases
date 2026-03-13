@@ -12,8 +12,16 @@ use std::sync::Arc;
 use std::time::Instant;
 use tauri::{AppHandle, Emitter, State};
 
+/// Payload emitted with `transcription-complete` event.
+#[derive(Clone, serde::Serialize)]
+pub struct TranscriptionCompletePayload {
+    pub text: String,
+    pub segment_count: usize,
+}
+
 /// Start audio capture. Shared by both the Tauri command and the hotkey handler.
-pub fn do_start_recording(state: &Arc<AppState>) -> Result<(), String> {
+/// `app` is optional — when provided, waveform levels are emitted to the frontend.
+pub fn do_start_recording(state: &Arc<AppState>, app: Option<AppHandle>) -> Result<(), String> {
     if state.audio_thread.lock().is_some() {
         return Err("Already recording".into());
     }
@@ -50,26 +58,60 @@ pub fn do_start_recording(state: &Arc<AppState>) -> Result<(), String> {
 
         let mut vad = EnergyVad::new(vad_threshold, vad_silence_frames);
         let mut has_speech = false;
+        const WAVEFORM_BARS: usize = 24;
 
         while !stop_flag.load(Ordering::Relaxed) {
             std::thread::sleep(std::time::Duration::from_millis(50));
 
-            // Check VAD on recent audio
-            let buf = buffer.lock();
-            let len = buf.len();
-            if len > 800 {
-                // Check last ~50ms of audio
-                let chunk_start = len.saturating_sub(800);
-                let chunk = &buf[chunk_start..len];
-                let is_speech = vad.is_speech(chunk);
-                if is_speech {
-                    has_speech = true;
+            // Check VAD on recent audio and compute waveform levels
+            let levels: Option<Vec<f32>> = {
+                let buf = buffer.lock();
+                let len = buf.len();
+                if len > 800 {
+                    // Check last ~50ms of audio
+                    let chunk_start = len.saturating_sub(800);
+                    let chunk = &buf[chunk_start..len];
+                    let is_speech = vad.is_speech(chunk);
+                    if is_speech {
+                        has_speech = true;
+                    }
+                    if has_speech && !is_speech {
+                        log::info!("VAD: silence detected, auto-stopping");
+                        stop_flag.store(true, Ordering::Relaxed);
+                    }
+
+                    // Compute waveform levels while we hold the lock
+                    if app.is_some() {
+                        let wave_start = len.saturating_sub(3200);
+                        let wave_chunk = &buf[wave_start..len];
+                        let bar_size = wave_chunk.len() / WAVEFORM_BARS;
+                        Some((0..WAVEFORM_BARS)
+                            .map(|i| {
+                                let start = i * bar_size;
+                                let end = (start + bar_size).min(wave_chunk.len());
+                                let rms: f32 = wave_chunk[start..end]
+                                    .iter()
+                                    .map(|s| s * s)
+                                    .sum::<f32>()
+                                    / (end - start) as f32;
+                                (rms.sqrt() * 15.0).min(1.0)
+                            })
+                            .collect())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
                 }
-                // Only auto-stop if we've detected speech before (prevents stopping before user starts talking)
-                if has_speech && !is_speech {
-                    log::info!("VAD: silence detected, auto-stopping");
-                    stop_flag.store(true, Ordering::Relaxed);
+            }; // lock dropped here
+
+            // Emit waveform levels outside the lock
+            if let (Some(ref app), Some(ref levels)) = (&app, &levels) {
+                let max_level = levels.iter().cloned().fold(0.0f32, f32::max);
+                if max_level > 0.01 {
+                    log::debug!("audio-levels max={:.3}", max_level);
                 }
+                let _ = app.emit("audio-levels", levels);
             }
         }
 
@@ -168,6 +210,9 @@ pub fn do_stop_and_transcribe(state: &Arc<AppState>) -> Result<String, String> {
     // Store last transcription for AI rewrite
     *state.last_transcription.lock() = Some(final_text.clone());
 
+    // Append to composition buffer for multi-segment rewrite
+    state.composition.lock().append(final_text.clone());
+
     state.set_state(STATE_IDLE);
     log::info!("Transcription complete: {}", final_text);
     Ok(final_text)
@@ -187,7 +232,7 @@ pub fn start_recording(
     app: AppHandle,
     state: State<'_, Arc<AppState>>,
 ) -> Result<(), String> {
-    do_start_recording(state.inner())?;
+    do_start_recording(state.inner(), Some(app.clone()))?;
     let _ = app.emit("recording-state-changed", "recording");
     if state.config.read().show_overlay {
         crate::windows::show_overlay(&app);
@@ -202,8 +247,12 @@ pub fn stop_recording(
 ) -> Result<String, String> {
     let _ = app.emit("recording-state-changed", "transcribing");
     let text = do_stop_and_transcribe(state.inner())?;
+    let segment_count = state.composition.lock().len();
     let _ = app.emit("recording-state-changed", "idle");
-    let _ = app.emit("transcription-complete", &text);
+    let _ = app.emit("transcription-complete", TranscriptionCompletePayload {
+        text: text.clone(),
+        segment_count,
+    });
     crate::windows::hide_overlay(&app);
     Ok(text)
 }
@@ -431,11 +480,17 @@ pub fn delete_model(
     Ok(())
 }
 
+#[derive(serde::Serialize, Clone)]
+pub struct RewriteResult {
+    pub text: String,
+    pub is_multi: bool,
+}
+
 #[tauri::command]
 pub fn rewrite_last_transcription(
     state: State<'_, Arc<AppState>>,
     style: Option<RewriteStyle>,
-) -> Result<String, String> {
+) -> Result<RewriteResult, String> {
     let config = state.config.read().clone();
 
     let api_key = config.groq_api_key.as_deref().unwrap_or("");
@@ -443,17 +498,27 @@ pub fn rewrite_last_transcription(
         return Err("Groq API key not set. Configure it in Settings > General.".into());
     }
 
-    let last_text = state.last_transcription.lock().clone();
-    let text = last_text.ok_or("No recent transcription to rewrite")?;
+    let (text, is_multi) = {
+        let buf = state.composition.lock();
+        if buf.len() == 0 {
+            let last_text = state.last_transcription.lock().clone();
+            (last_text.ok_or("No recent transcription to rewrite")?, false)
+        } else {
+            (buf.join(), buf.is_multi())
+        }
+    };
 
     let rewrite_style = style.unwrap_or(config.rewrite_style);
-    log::info!("Rewriting with style: {:?}", rewrite_style);
+    log::info!("Rewriting {} segment(s) with style: {:?}", if is_multi { "multiple" } else { "single" }, rewrite_style);
 
     let rewritten = crate::rewrite::rewrite_text(&text, &rewrite_style, api_key, Some(&state.groq_usage))
         .map_err(|e| format!("Rewrite failed: {}", e))?;
 
+    // Clear composition buffer after successful rewrite
+    state.composition.lock().clear();
+
     log::info!("Rewrite complete: {}", rewritten);
-    Ok(rewritten)
+    Ok(RewriteResult { text: rewritten, is_multi })
 }
 
 /// Undo the last paste (Cmd+Z) then inject new text. Used by rewrite flow.
@@ -492,6 +557,46 @@ pub fn undo_and_inject(text: &str, injection_method: &crate::config::settings::I
     }
 }
 
+/// Select `char_count` characters backward from cursor, then paste replacement.
+/// Uses Shift+Left Arrow to build a selection, then clipboard paste to replace it.
+pub fn select_back_and_inject(char_count: usize, text: &str) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use core_graphics::event::{CGEvent, CGEventFlags};
+        use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
+
+        let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState)
+            .map_err(|_| "Failed to create event source")?;
+
+        log::info!("Selecting {} chars backward for replacement...", char_count);
+
+        // Left Arrow keycode = 123. Send with Shift flag to extend selection.
+        for i in 0..char_count {
+            let key_down = CGEvent::new_keyboard_event(source.clone(), 123, true)
+                .map_err(|_| "Failed to create key event")?;
+            key_down.set_flags(CGEventFlags::CGEventFlagShift);
+            key_down.post(core_graphics::event::CGEventTapLocation::HID);
+
+            let key_up = CGEvent::new_keyboard_event(source.clone(), 123, false)
+                .map_err(|_| "Failed to create key event")?;
+            key_up.set_flags(CGEventFlags::CGEventFlagShift);
+            key_up.post(core_graphics::event::CGEventTapLocation::HID);
+
+            // 1ms delay per event to let the target app process reliably
+            if (i + 1) % 2 == 0 {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+        }
+
+        // Wait for selection to settle
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        log::info!("Selected {} chars, injecting replacement", char_count);
+    }
+
+    // Paste rewritten text — replaces the selection
+    crate::inject::clipboard::inject_via_clipboard(text).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn get_groq_usage(state: State<'_, Arc<AppState>>) -> GroqUsage {
     state.groq_usage.lock().clone()
@@ -515,4 +620,15 @@ pub fn get_license_status(state: State<'_, Arc<AppState>>) -> LicenseStatus {
 #[tauri::command]
 pub fn deactivate_license(state: State<'_, Arc<AppState>>) -> Result<(), String> {
     license::deactivate_license(&state.data_dir).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn clear_composition(state: State<'_, Arc<AppState>>) {
+    state.composition.lock().clear();
+    log::info!("Composition buffer cleared");
+}
+
+#[tauri::command]
+pub fn get_composition_count(state: State<'_, Arc<AppState>>) -> usize {
+    state.composition.lock().len()
 }

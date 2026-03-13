@@ -75,7 +75,7 @@ export const exportHistory = () =>
 
 /** Rewrite last transcription using AI */
 export const rewriteLastTranscription = (style?: RewriteStyle) =>
-  invoke<string>("rewrite_last_transcription", { style: style ?? null });
+  invoke<{ text: string; is_multi: boolean }>("rewrite_last_transcription", { style: style ?? null });
 
 /** Get Groq API rate limit usage */
 export const getGroqUsage = () => invoke<GroqUsage>("get_groq_usage");
@@ -91,3 +91,10 @@ export const getLicenseStatus = () =>
 /** Deactivate current license */
 export const deactivateLicense = () =>
   invoke<void>("deactivate_license");
+
+/** Clear the composition buffer */
+export const clearComposition = () => invoke<void>("clear_composition");
+
+/** Get number of segments in composition buffer */
+export const getCompositionCount = () =>
+  invoke<number>("get_composition_count");

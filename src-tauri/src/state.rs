@@ -41,6 +41,73 @@ pub fn update_groq_usage(
     u.updated_at = Some(chrono::Utc::now().to_rfc3339());
 }
 
+/// Composition buffer TTL in seconds (30 minutes).
+const BUFFER_TTL_SECS: u64 = 1800;
+/// Maximum entries in the composition buffer.
+const BUFFER_MAX_ENTRIES: usize = 20;
+
+/// Accumulates transcription segments for multi-segment rewrite.
+pub struct CompositionBuffer {
+    entries: Vec<String>,
+    /// Total characters injected across all segments (for deletion on rewrite).
+    injected_chars: usize,
+    last_appended_at: Option<Instant>,
+}
+
+impl CompositionBuffer {
+    pub fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+            injected_chars: 0,
+            last_appended_at: None,
+        }
+    }
+
+    /// Append a transcription segment. Clears stale entries if TTL expired, drops oldest if at max cap.
+    pub fn append(&mut self, text: String) {
+        // Clear if TTL expired
+        if let Some(last) = self.last_appended_at {
+            if last.elapsed().as_secs() >= BUFFER_TTL_SECS {
+                self.entries.clear();
+                self.injected_chars = 0;
+            }
+        }
+        // Drop oldest if at max
+        if self.entries.len() >= BUFFER_MAX_ENTRIES {
+            let removed = self.entries.remove(0);
+            self.injected_chars = self.injected_chars.saturating_sub(removed.chars().count());
+        }
+        self.injected_chars += text.chars().count();
+        self.entries.push(text);
+        self.last_appended_at = Some(Instant::now());
+    }
+
+    pub fn clear(&mut self) {
+        self.entries.clear();
+        self.injected_chars = 0;
+        self.last_appended_at = None;
+    }
+
+    /// Join all entries with a space separator.
+    pub fn join(&self) -> String {
+        self.entries.join(" ")
+    }
+
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Total characters injected across all buffered segments.
+    pub fn injected_chars(&self) -> usize {
+        self.injected_chars
+    }
+
+    /// True when there are 2+ segments in the buffer.
+    pub fn is_multi(&self) -> bool {
+        self.entries.len() > 1
+    }
+}
+
 /// Recording states
 pub const STATE_IDLE: u8 = 0;
 pub const STATE_RECORDING: u8 = 1;
@@ -63,6 +130,8 @@ pub struct AppState {
     pub last_transcription: Mutex<Option<String>>,
     /// Groq API rate limit usage, updated after each API call.
     pub groq_usage: Mutex<GroqUsage>,
+    /// Composition buffer for multi-segment rewrite.
+    pub composition: Mutex<CompositionBuffer>,
 }
 
 impl AppState {
@@ -88,6 +157,7 @@ impl AppState {
             recording_started_at: Mutex::new(None),
             last_transcription: Mutex::new(None),
             groq_usage: Mutex::new(GroqUsage::default()),
+            composition: Mutex::new(CompositionBuffer::new()),
         }
     }
 

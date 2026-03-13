@@ -20,6 +20,7 @@ use std::sync::Arc;
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env_logger::init();
@@ -57,6 +58,8 @@ pub fn run() {
             commands::activate_license,
             commands::get_license_status,
             commands::deactivate_license,
+            commands::clear_composition,
+            commands::get_composition_count,
         ])
         .setup(|app| {
             // Set up the system tray
@@ -78,11 +81,12 @@ pub fn run() {
                 WebviewUrl::App("index.html".into()),
             )
             .title("")
-            .inner_size(300.0, 60.0)
+            .inner_size(360.0, 60.0)
             .resizable(false)
             .decorations(false)
             .transparent(true)
-            .always_on_top(true)
+            // NOTE: do NOT use .always_on_top(true) — it sets a low Tauri-managed
+            // window level that conflicts with our manual setLevel_ for full-screen overlay.
             .skip_taskbar(true)
             .visible(false)
             .focused(false)
@@ -90,10 +94,21 @@ pub fn run() {
 
             overlay.set_ignore_cursor_events(true)?;
 
+            // Swizzle the overlay NSWindow to NSPanel so it can appear over
+            // full-screen apps. Only NSPanel is allowed in full-screen Spaces.
+            #[cfg(target_os = "macos")]
+            {
+                use cocoa::base::id;
+                let ns_window: id = overlay.ns_window().unwrap() as id;
+                unsafe {
+                    windows::swizzle_to_nspanel(ns_window);
+                }
+            }
+
             // Position top-center below menu bar
             if let Ok(Some(monitor)) = overlay.primary_monitor() {
                 let size = monitor.size();
-                let x = (size.width as f64 / 2.0 - 150.0) as i32;
+                let x = (size.width as f64 / 2.0 - 180.0) as i32;
                 let _ = overlay.set_position(tauri::Position::Physical(
                     tauri::PhysicalPosition::new(x, 40),
                 ));
@@ -145,7 +160,7 @@ fn register_hotkey(app: &tauri::App, shortcut_str: &str) {
 
             if should_start {
                 log::info!("Hotkey: starting recording");
-                if let Err(e) = commands::do_start_recording(state.inner()) {
+                if let Err(e) = commands::do_start_recording(state.inner(), Some(app_handle.clone())) {
                     log::error!("Hotkey start recording failed: {}", e);
                 } else {
                     let config = state.config.read();
@@ -175,7 +190,14 @@ fn register_hotkey(app: &tauri::App, shortcut_str: &str) {
                                 sound::play_stop_sound();
                             }
 
-                            let _ = app.emit("transcription-complete", &text);
+                            let segment_count = state.composition.lock().len();
+                            let _ = app.emit(
+                                "transcription-complete",
+                                commands::TranscriptionCompletePayload {
+                                    text: text.clone(),
+                                    segment_count,
+                                },
+                            );
 
                             // Save to history DB with actual duration
                             save_to_history(&state, &text, duration_ms);
@@ -270,17 +292,30 @@ fn register_rewrite_hotkey(app: &tauri::App, shortcut_str: &str) {
                 windows::show_overlay(&app);
                 let _ = app.emit("rewrite-started", ());
 
-                let text = state.last_transcription.lock().clone().unwrap_or_default();
+                // Read from composition buffer; fall back to last_transcription
+                let (text, is_multi, injected_chars) = {
+                    let buf = state.composition.lock();
+                    if buf.len() == 0 {
+                        let last = state.last_transcription.lock().clone().unwrap_or_default();
+                        (last, false, 0usize)
+                    } else {
+                        (buf.join(), buf.is_multi(), buf.injected_chars())
+                    }
+                };
                 let config = state.config.read().clone();
 
                 match rewrite::rewrite_text(&text, &config.rewrite_style, config.groq_api_key.as_deref().unwrap_or(""), Some(&state.groq_usage)) {
                     Ok(rewritten) => {
-                        log::info!("Rewrite complete: {}", rewritten);
-                        // Undo original paste, inject rewritten text
-                        if let Err(e) = commands::undo_and_inject(&rewritten, &config.injection_method) {
+                        log::info!("Rewrite complete (multi={}, injected_chars={}): {}", is_multi, injected_chars, rewritten);
+
+                        // Select backward the exact number of injected characters, then replace
+                        if let Err(e) = commands::select_back_and_inject(injected_chars, &rewritten) {
                             log::error!("Rewrite injection failed: {}", e);
                         }
-                        *state.last_transcription.lock() = Some(rewritten.clone());
+
+                        // Clear composition buffer and last_transcription to prevent re-rewriting
+                        state.composition.lock().clear();
+                        *state.last_transcription.lock() = None;
                         let _ = app.emit("rewrite-complete", &rewritten);
                     }
                     Err(e) => {

@@ -9,18 +9,28 @@
   --text-secondary: #aaa;
 }
 
-body {
+html, body {
   margin: 0;
   padding: 0;
+  border: none;
+  outline: none;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color: var(--text-primary);
   background: transparent;
   -webkit-font-smoothing: antialiased;
 }
 
+#root {
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
 /* Overlay window: fully transparent background */
 .overlay-window {
   background: transparent;
+  border: none;
+  outline: none;
   overflow: hidden;
 }
 
