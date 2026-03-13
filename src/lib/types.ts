@@ -1,6 +1,15 @@
 /** Recording state from Rust backend */
 export type RecordingState = "idle" | "recording" | "transcribing";
 
+/** Transcription backend selection */
+export type TranscriptionBackend = "Local" | "Cloud";
+
+/** AI rewrite style */
+export type RewriteStyle = "Professional" | "Casual" | "Concise" | "Friendly";
+
+/** License status */
+export type LicenseStatus = "Free" | "Licensed" | "Invalid";
+
 /** Settings matching Rust Settings struct */
 export interface Settings {
   model_size: ModelSize;
@@ -10,12 +19,15 @@ export interface Settings {
   language: string;
   auto_copy: boolean;
   vad_threshold: number;
+  vad_silence_timeout: number;
   show_overlay: boolean;
   sound_feedback: boolean;
   auto_launch: boolean;
   transcription_backend: TranscriptionBackend;
-  groq_api_key?: string;
-  vad_silence_secs: number;
+  groq_api_key: string | null;
+  rewrite_enabled: boolean;
+  rewrite_style: RewriteStyle;
+  rewrite_hotkey: string;
 }
 
 export type ModelSize =
@@ -29,8 +41,6 @@ export type ModelSize =
 export type HotkeyMode = "PushToTalk" | "Toggle";
 
 export type InjectionMethod = "Clipboard" | "Keyboard";
-
-export type TranscriptionBackend = "Local" | "Groq";
 
 /** History entry matching Rust HistoryEntry struct */
 export interface HistoryEntry {
@@ -67,6 +77,17 @@ export interface ModelStatus {
   model: string;
   downloaded: boolean;
   size_bytes: number | null;
+}
+
+/** Groq API rate limit usage */
+export interface GroqUsage {
+  limit_requests: number | null;
+  remaining_requests: number | null;
+  reset_requests: string | null;
+  limit_tokens: number | null;
+  remaining_tokens: number | null;
+  reset_tokens: string | null;
+  updated_at: string | null;
 }
 
 /** Model download progress event payload */

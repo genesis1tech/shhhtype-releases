@@ -22,16 +22,3 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-
-# Secrets and certificates
-.env
-.env.*
-*.p12
-*.key
-*.crt
-*.pem
-*.cer
-
-# Build artifacts
-.vite
-src-tauri/target

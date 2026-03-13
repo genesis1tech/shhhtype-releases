@@ -1,8 +1,9 @@
 use crate::audio::capture::AudioCapture;
 use crate::audio::resampler::resample_to_16khz;
-use crate::config::settings::{Settings, TranscriptionBackend};
+use crate::config::settings::{RewriteStyle, Settings, TranscriptionBackend};
 use crate::db::history::{HistoryEntry, HistoryQuery};
-use crate::state::{AppState, STATE_IDLE, STATE_RECORDING, STATE_TRANSCRIBING};
+use crate::license::{self, LicenseStatus};
+use crate::state::{AppState, GroqUsage, STATE_IDLE, STATE_RECORDING, STATE_TRANSCRIBING};
 use crate::transcribe::dictionary::DictionaryEntry;
 use crate::transcribe::model::{self, ModelSize, ModelStatus};
 use crate::vad::energy::EnergyVad;
@@ -31,9 +32,10 @@ pub fn do_start_recording(state: &Arc<AppState>) -> Result<(), String> {
     let buffer = Arc::clone(&state.audio_buffer);
     let stop_flag = Arc::clone(&state.audio_stop_flag);
     let sample_rate_out = Arc::clone(&state.audio_sample_rate);
-    let vad_threshold = state.config.read().vad_threshold;
-    // Each VAD frame = 50ms; convert seconds → frame count
-    let vad_silence_frames = (state.config.read().vad_silence_secs * 1000.0 / 50.0) as usize;
+    let config = state.config.read().clone();
+    let vad_threshold = config.vad_threshold;
+    // Convert seconds to frame count (each frame ~50ms)
+    let vad_silence_frames = (config.vad_silence_timeout / 0.05).round() as usize;
 
     let handle = std::thread::spawn(move || {
         let mut capture = AudioCapture::new();
@@ -43,10 +45,10 @@ pub fn do_start_recording(state: &Arc<AppState>) -> Result<(), String> {
         }
 
         sample_rate_out.store(capture.sample_rate(), Ordering::Relaxed);
-        log::info!("Audio capture thread running at {}Hz", capture.sample_rate());
+        log::info!("Audio capture thread running at {}Hz, silence timeout: {}s ({} frames)",
+            capture.sample_rate(), config.vad_silence_timeout, vad_silence_frames);
 
         let mut vad = EnergyVad::new(vad_threshold, vad_silence_frames);
-        log::info!("VAD silence timeout: {}ms ({} frames)", vad_silence_frames * 50, vad_silence_frames);
         let mut has_speech = false;
 
         while !stop_flag.load(Ordering::Relaxed) {
@@ -116,21 +118,22 @@ pub fn do_stop_and_transcribe(state: &Arc<AppState>) -> Result<String, String> {
 
     log::info!("Resampled to {} samples at 16kHz", samples_16k.len());
 
-    let (language, backend, groq_key) = {
-        let cfg = state.config.read();
-        (
-            cfg.language.clone(),
-            cfg.transcription_backend.clone(),
-            cfg.groq_api_key.clone(),
-        )
-    };
-
-    let transcribed_text = match backend {
+    let config = state.config.read().clone();
+    let transcribed_text = match config.transcription_backend {
+        TranscriptionBackend::Cloud => {
+            let api_key = config.groq_api_key.as_deref().unwrap_or("");
+            if api_key.is_empty() {
+                state.set_state(STATE_IDLE);
+                return Err("Groq API key not set. Configure it in Settings > General.".into());
+            }
+            log::info!("Transcribing via Groq cloud...");
+            crate::transcribe::groq::transcribe(&samples_16k, &config.language, api_key, Some(&state.groq_usage))
+                .map_err(|e| format!("Cloud transcription failed: {}", e))?
+        }
         TranscriptionBackend::Local => {
             {
                 let mut engine = state.whisper_engine.lock();
                 if !engine.is_loaded() {
-                    let config = state.config.read();
                     let model_path = model::model_path(&state.data_dir, &config.model_size);
                     if !model_path.exists() {
                         state.set_state(STATE_IDLE);
@@ -145,19 +148,12 @@ pub fn do_stop_and_transcribe(state: &Arc<AppState>) -> Result<String, String> {
                         .map_err(|e| format!("Failed to load model: {}", e))?;
                 }
             }
+
             state
                 .whisper_engine
                 .lock()
-                .transcribe(&samples_16k, &language)
+                .transcribe(&samples_16k, &config.language)
                 .map_err(|e| format!("Transcription failed: {}", e))?
-        }
-        TranscriptionBackend::Groq => {
-            let api_key = groq_key.ok_or_else(|| {
-                "Groq API key not configured. Please add it in Settings.".to_string()
-            })?;
-            log::info!("Transcribing via Groq API (whisper-large-v3-turbo)...");
-            crate::transcribe::groq::transcribe(&samples_16k, &language, &api_key)
-                .map_err(|e| format!("Groq transcription failed: {}", e))?
         }
     };
 
@@ -168,6 +164,9 @@ pub fn do_stop_and_transcribe(state: &Arc<AppState>) -> Result<String, String> {
     } else {
         transcribed_text
     };
+
+    // Store last transcription for AI rewrite
+    *state.last_transcription.lock() = Some(final_text.clone());
 
     state.set_state(STATE_IDLE);
     log::info!("Transcription complete: {}", final_text);
@@ -430,4 +429,90 @@ pub fn delete_model(
         log::info!("Deleted model: {}", model_size.id());
     }
     Ok(())
+}
+
+#[tauri::command]
+pub fn rewrite_last_transcription(
+    state: State<'_, Arc<AppState>>,
+    style: Option<RewriteStyle>,
+) -> Result<String, String> {
+    let config = state.config.read().clone();
+
+    let api_key = config.groq_api_key.as_deref().unwrap_or("");
+    if api_key.is_empty() {
+        return Err("Groq API key not set. Configure it in Settings > General.".into());
+    }
+
+    let last_text = state.last_transcription.lock().clone();
+    let text = last_text.ok_or("No recent transcription to rewrite")?;
+
+    let rewrite_style = style.unwrap_or(config.rewrite_style);
+    log::info!("Rewriting with style: {:?}", rewrite_style);
+
+    let rewritten = crate::rewrite::rewrite_text(&text, &rewrite_style, api_key, Some(&state.groq_usage))
+        .map_err(|e| format!("Rewrite failed: {}", e))?;
+
+    log::info!("Rewrite complete: {}", rewritten);
+    Ok(rewritten)
+}
+
+/// Undo the last paste (Cmd+Z) then inject new text. Used by rewrite flow.
+pub fn undo_and_inject(text: &str, injection_method: &crate::config::settings::InjectionMethod) -> Result<(), String> {
+    // Simulate Cmd+Z to undo the original paste
+    #[cfg(target_os = "macos")]
+    {
+        use core_graphics::event::{CGEvent, CGEventFlags};
+        use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
+
+        let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState)
+            .map_err(|_| "Failed to create event source")?;
+
+        // Cmd+Z (keycode 6 = Z)
+        let key_down = CGEvent::new_keyboard_event(source.clone(), 6, true)
+            .map_err(|_| "Failed to create key event")?;
+        key_down.set_flags(CGEventFlags::CGEventFlagCommand);
+        key_down.post(core_graphics::event::CGEventTapLocation::HID);
+
+        let key_up = CGEvent::new_keyboard_event(source, 6, false)
+            .map_err(|_| "Failed to create key event")?;
+        key_up.set_flags(CGEventFlags::CGEventFlagCommand);
+        key_up.post(core_graphics::event::CGEventTapLocation::HID);
+
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+
+    // Inject the rewritten text
+    match injection_method {
+        crate::config::settings::InjectionMethod::Clipboard => {
+            crate::inject::clipboard::inject_via_clipboard(text).map_err(|e| e.to_string())
+        }
+        crate::config::settings::InjectionMethod::Keyboard => {
+            crate::inject::keyboard::inject_via_keyboard(text).map_err(|e| e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
+pub fn get_groq_usage(state: State<'_, Arc<AppState>>) -> GroqUsage {
+    state.groq_usage.lock().clone()
+}
+
+#[tauri::command]
+pub fn activate_license(
+    state: State<'_, Arc<AppState>>,
+    key: String,
+) -> Result<LicenseStatus, String> {
+    license::activate_license(&key, &state.data_dir)
+        .map(|_| LicenseStatus::Licensed)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_license_status(state: State<'_, Arc<AppState>>) -> LicenseStatus {
+    license::check_license(&state.data_dir)
+}
+
+#[tauri::command]
+pub fn deactivate_license(state: State<'_, Arc<AppState>>) -> Result<(), String> {
+    license::deactivate_license(&state.data_dir).map_err(|e| e.to_string())
 }

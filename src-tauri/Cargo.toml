@@ -56,17 +56,15 @@ hound = "3.5"
 rubato = "0.16"
 
 # HTTP client for model downloads
-reqwest = { version = "0.12", features = ["stream", "blocking", "json", "multipart"] }
+reqwest = { version = "0.12", features = ["stream", "blocking", "multipart", "json"] }
 futures-util = "0.3"
-
-# Integrity verification
-sha2 = "0.10"
 
 # Utilities
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4"] }
 dirs = "6"
 parking_lot = "0.12"
+gethostname = "0.5"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa = "0.26"

@@ -20,6 +20,9 @@ pub struct Settings {
     pub auto_copy: bool,
     /// VAD silence threshold (RMS).
     pub vad_threshold: f32,
+    /// Seconds of silence before auto-stopping recording.
+    #[serde(default = "default_vad_silence_timeout")]
+    pub vad_silence_timeout: f32,
     /// Show the floating overlay during recording.
     pub show_overlay: bool,
     /// Play sounds on start/stop recording.
@@ -27,29 +30,47 @@ pub struct Settings {
     /// Launch at login.
     #[serde(default)]
     pub auto_launch: bool,
-    /// Where transcription runs: Local (on-device) or Groq (cloud API).
+    /// Transcription backend: local whisper or cloud (Groq).
     #[serde(default)]
     pub transcription_backend: TranscriptionBackend,
-    /// Groq API key (only used when backend = Groq).
+    /// Groq API key for cloud transcription.
     #[serde(default)]
     pub groq_api_key: Option<String>,
-    /// Seconds of silence before auto-stopping recording (VAD).
-    #[serde(default = "default_vad_silence_secs")]
-    pub vad_silence_secs: f32,
+    /// Enable AI rewrite after transcription.
+    #[serde(default)]
+    pub rewrite_enabled: bool,
+    /// Style for AI rewrite.
+    #[serde(default)]
+    pub rewrite_style: RewriteStyle,
+    /// Hotkey for AI rewrite (e.g., "CmdOrCtrl+Alt+R").
+    #[serde(default = "default_rewrite_hotkey")]
+    pub rewrite_hotkey: String,
 }
 
-fn default_vad_silence_secs() -> f32 {
+fn default_vad_silence_timeout() -> f32 {
     15.0
 }
 
-/// Where transcription runs.
+fn default_rewrite_hotkey() -> String {
+    "CmdOrCtrl+Alt+R".to_string()
+}
+
+/// Transcription backend selection.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Default)]
 pub enum TranscriptionBackend {
-    /// Run Whisper locally on-device (default).
     #[default]
     Local,
-    /// Send audio to Groq's free Whisper API (whisper-large-v3-turbo).
-    Groq,
+    Cloud,
+}
+
+/// AI rewrite style.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Default)]
+pub enum RewriteStyle {
+    #[default]
+    Professional,
+    Casual,
+    Concise,
+    Friendly,
 }
 
 /// How to inject transcribed text.
@@ -71,12 +92,15 @@ impl Default for Settings {
             language: "en".to_string(),
             auto_copy: false,
             vad_threshold: 0.01,
+            vad_silence_timeout: 15.0,
             show_overlay: true,
             sound_feedback: true,
             auto_launch: false,
-            transcription_backend: TranscriptionBackend::Local,
+            transcription_backend: TranscriptionBackend::Cloud,
             groq_api_key: None,
-            vad_silence_secs: 15.0,
+            rewrite_enabled: false,
+            rewrite_style: RewriteStyle::Professional,
+            rewrite_hotkey: default_rewrite_hotkey(),
         }
     }
 }

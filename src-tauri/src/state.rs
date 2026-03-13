@@ -7,6 +7,40 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 
+/// Rate limit usage data extracted from Groq API response headers.
+#[derive(Clone, Default, serde::Serialize)]
+pub struct GroqUsage {
+    pub limit_requests: Option<u32>,
+    pub remaining_requests: Option<u32>,
+    pub reset_requests: Option<String>,
+    pub limit_tokens: Option<u32>,
+    pub remaining_tokens: Option<u32>,
+    pub reset_tokens: Option<String>,
+    pub updated_at: Option<String>,
+}
+
+/// Extract Groq rate limit headers from a response and update shared usage state.
+pub fn update_groq_usage(
+    headers: &reqwest::header::HeaderMap,
+    usage: &Mutex<GroqUsage>,
+) {
+    let get = |name: &str| -> Option<String> {
+        headers.get(name).and_then(|v| v.to_str().ok()).map(|s| s.to_string())
+    };
+    let get_u32 = |name: &str| -> Option<u32> {
+        get(name).and_then(|s| s.parse().ok())
+    };
+
+    let mut u = usage.lock();
+    if let Some(v) = get_u32("x-ratelimit-limit-requests") { u.limit_requests = Some(v); }
+    if let Some(v) = get_u32("x-ratelimit-remaining-requests") { u.remaining_requests = Some(v); }
+    if let Some(v) = get("x-ratelimit-reset-requests") { u.reset_requests = Some(v); }
+    if let Some(v) = get_u32("x-ratelimit-limit-tokens") { u.limit_tokens = Some(v); }
+    if let Some(v) = get_u32("x-ratelimit-remaining-tokens") { u.remaining_tokens = Some(v); }
+    if let Some(v) = get("x-ratelimit-reset-tokens") { u.reset_tokens = Some(v); }
+    u.updated_at = Some(chrono::Utc::now().to_rfc3339());
+}
+
 /// Recording states
 pub const STATE_IDLE: u8 = 0;
 pub const STATE_RECORDING: u8 = 1;
@@ -25,6 +59,10 @@ pub struct AppState {
     pub data_dir: PathBuf,
     /// When recording started, for duration tracking.
     pub recording_started_at: Mutex<Option<Instant>>,
+    /// Last transcription text, used by AI rewrite.
+    pub last_transcription: Mutex<Option<String>>,
+    /// Groq API rate limit usage, updated after each API call.
+    pub groq_usage: Mutex<GroqUsage>,
 }
 
 impl AppState {
@@ -48,6 +86,8 @@ impl AppState {
             config: RwLock::new(config),
             data_dir,
             recording_started_at: Mutex::new(None),
+            last_transcription: Mutex::new(None),
+            groq_usage: Mutex::new(GroqUsage::default()),
         }
     }
 

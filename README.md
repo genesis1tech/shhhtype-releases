@@ -1,23 +1,27 @@
 # vox2txt
 
-A macOS menu bar voice-to-text tool for developers. Press a hotkey, speak, and your words are transcribed locally using Whisper and injected into the focused application.
+A free, open-source macOS menu bar voice-to-text tool for developers. Press a hotkey, speak, and your words are transcribed and injected into the focused application — IDEs, terminals, browsers, anything.
 
-All processing happens on-device via whisper.cpp with Metal GPU acceleration. No cloud APIs, no data leaves your machine.
+Built because I got tired of paying for WhisperFlow. vox2txt gives you the same (better) experience with two transcription options:
+
+- **Local mode** — fully on-device via whisper.cpp with Metal GPU acceleration. No cloud APIs, no data leaves your machine.
+- **Cloud mode** — optional [Groq](https://groq.com/) backend using whisper-large-v3-turbo for faster transcription. Requires a free Groq API key.
 
 ## Features
 
-- **Global hotkey** (Cmd+Alt+V) with push-to-talk or toggle modes
-- **Local Whisper transcription** with Metal GPU on Apple Silicon
-- **Text injection** via clipboard paste into any app (terminals, IDEs, browsers)
-- **Voice Activity Detection** - auto-stops recording after silence
-- **Model management** - download Whisper models (Tiny to Large V3) from the Settings UI
-- **Custom dictionary** - correct terms Whisper frequently gets wrong
+- **Global hotkey** (`Cmd+Alt+V` default) with push-to-talk or toggle modes
+- **Local Whisper transcription** with Metal GPU acceleration on Apple Silicon
+- **Groq cloud transcription** as an optional backend (whisper-large-v3-turbo)
+- **Text injection** via clipboard paste (`Cmd+V`) or character-by-character keyboard simulation
+- **Voice Activity Detection** — auto-stops recording after configurable silence timeout
+- **Model management** — download Whisper models (Tiny 75MB to Large V3 3.1GB) from the Settings UI
+- **Custom dictionary** — correct terms Whisper frequently gets wrong
 - **Searchable history** with export to JSON
-- **Floating overlay** during recording
+- **Floating overlay** pill indicator during recording
 - **Sound feedback** on start/stop
 - **macOS notifications** on transcription complete
 - **Launch at login** support
-- **10 languages** + auto-detect
+- **9 languages** + auto-detect (English, Spanish, French, German, Italian, Portuguese, Japanese, Korean, Chinese)
 
 ## Prerequisites
 
@@ -25,6 +29,7 @@ All processing happens on-device via whisper.cpp with Metal GPU acceleration. No
 - **Rust** (via [rustup](https://rustup.rs/))
 - **Node.js** 18+ and **npm**
 - **Xcode Command Line Tools** (`xcode-select --install`)
+- **cmake** (required for building whisper-sys: `brew install cmake`)
 
 ## Setup
 
@@ -35,9 +40,6 @@ cd vox2txt
 
 # Install frontend dependencies
 npm install
-
-# Setup code signing for development (one-time)
-./scripts/setup-dev-signing.sh
 ```
 
 ## Development
@@ -49,74 +51,175 @@ RUST_LOG=info npm run tauri dev
 
 This starts both the Vite dev server (frontend) and the Tauri Rust backend. The app appears as a system tray icon.
 
+### Useful commands
+
+```bash
+# Check Rust only (faster feedback loop)
+cargo check --manifest-path src-tauri/Cargo.toml
+
+# Build Rust only
+cargo build --manifest-path src-tauri/Cargo.toml
+
+# Build frontend only
+npx vite build
+```
+
 ## Building for Production
 
 ```bash
-# Build the .app bundle and .dmg installer
 npm run tauri build
 ```
 
 The built application will be in `src-tauri/target/release/bundle/`:
-- `macos/vox2txt.app` - The application bundle (drag to /Applications)
-- `dmg/vox2txt_0.1.0_aarch64.dmg` - Disk image installer for distribution
+- `macos/vox2txt.app` — application bundle (drag to `/Applications`)
+- `dmg/vox2txt_0.1.0_aarch64.dmg` — disk image installer
 
-## macOS Permissions
+## Installing on Other Macs
 
-vox2txt requires three macOS permissions:
+**Option A: Share the `.dmg` (simplest)**
 
-| Permission | Purpose | How to Grant |
-|------------|---------|--------------|
-| **Microphone** | Audio capture for transcription | Prompted automatically on first use |
-| **Accessibility** | Simulate Cmd+V to paste text into apps | System Settings > Privacy & Security > Accessibility |
-| **Input Monitoring** | Global hotkey detection when app is not focused | System Settings > Privacy & Security > Input Monitoring |
+1. Build with `npm run tauri build`
+2. Send the `.dmg` from `src-tauri/target/release/bundle/dmg/`
+3. Open the `.dmg`, drag `vox2txt.app` to `/Applications`
+4. On first launch, right-click > Open (macOS will warn about unidentified developer)
+5. Grant Microphone and Accessibility permissions when prompted
 
-The development signing certificate (`scripts/setup-dev-signing.sh`) ensures these permissions persist across rebuilds.
+**Option B: Code-signed `.dmg` (no Gatekeeper warnings)**
+
+1. Get an [Apple Developer ID](https://developer.apple.com/account/) ($99/year)
+2. Add your signing identity to `src-tauri/tauri.conf.json`:
+   ```json
+   "macOS": {
+     "signingIdentity": "Developer ID Application: Your Name (TEAM_ID)"
+   }
+   ```
+3. Build: `npm run tauri build`
+4. Notarize (required for macOS 10.15+):
+   ```bash
+   xcrun notarytool submit src-tauri/target/release/bundle/dmg/vox2txt_0.1.0_aarch64.dmg \
+     --apple-id your@email.com --team-id TEAM_ID --password app-specific-password --wait
+   xcrun stapler staple src-tauri/target/release/bundle/dmg/vox2txt_0.1.0_aarch64.dmg
+   ```
+
+**Note:** The build is architecture-specific. Apple Silicon produces `aarch64`. For Intel Macs, build on Intel or use `--target x86_64-apple-darwin`.
 
 ## First Launch
 
-1. **Grant permissions** - macOS will prompt for Microphone access. Enable Accessibility and Input Monitoring manually in System Settings.
-2. **Download a model** - Open Settings (tray icon > Settings), go to the General tab, select a model size, and click Download. Start with **Base (142MB)** for a good speed/accuracy balance.
-3. **Press the hotkey** - Default is `Cmd+Alt+V`. Hold, speak, then release (push-to-talk) or press again (toggle mode). Your transcription is typed into the focused app.
+1. **Grant permissions** — macOS will prompt for Microphone and Accessibility access. Both are required.
+2. **Download a model** — Open Settings (tray icon > Settings), go to the General tab, select a model size, and click Download. Start with **Base (142MB)** for a good speed/accuracy balance.
+3. **Press the hotkey** — Default is `Cmd+Alt+V`. Speak, then release (push-to-talk) or press again (toggle mode). Your transcription is typed into the focused app.
 
 ## Configuration
 
-Open Settings from the system tray menu. Available options:
+Open Settings from the system tray menu.
 
 | Setting | Tab | Description |
 |---------|-----|-------------|
-| Whisper Model | General | Tiny through Large V3 Turbo |
-| Language | General | English, Spanish, French, etc. or auto-detect |
-| Hotkey | General | Customizable keyboard shortcut |
-| Mode | General | Push-to-talk or toggle |
-| Injection Method | General | Clipboard paste (Cmd+V) or keyboard simulation |
+| Whisper Model | General | Tiny, Base, Small, Medium, Large V3, Large V3 Turbo |
+| Language | General | English, Spanish, French, German, Italian, Portuguese, Japanese, Korean, Chinese, or auto-detect |
+| Hotkey | General | Customizable keyboard shortcut (click Change, press new combo) |
+| Mode | General | Push-to-talk (hold key) or toggle (press to start/stop) |
+| Injection Method | General | Clipboard paste (`Cmd+V`) or keyboard simulation |
 | Auto-copy | General | Copy transcription to clipboard when using keyboard injection |
 | Launch at login | General | Start vox2txt on macOS login |
-| VAD Threshold | Audio | Silence detection sensitivity |
-| Show Overlay | Audio | Floating recording indicator |
+| VAD Threshold | Audio | Silence detection sensitivity (lower = more sensitive) |
+| Show Overlay | Audio | Floating recording indicator pill |
 | Sound Feedback | Audio | Audible beep on start/stop |
-| Dictionary | Dictionary | Custom word corrections |
+| Dictionary | Dictionary | Custom word corrections (e.g., "react native" to "React Native") |
 | History | History | Search, review, and export past transcriptions |
+
+## Architecture
+
+```
+Menu Bar Tray App (no main window)
+├── Global Hotkey (push-to-talk / toggle)
+├── Audio Pipeline: cpal capture → rubato resample 16kHz → VAD silence detection → buffer
+├── Transcription: whisper-rs + Metal GPU → dictionary corrections
+│   └── Optional: Groq cloud API (whisper-large-v3-turbo)
+├── Text Injection: clipboard paste (arboard + CGEvent Cmd+V) or keyboard simulation (CGEvent)
+├── Overlay Window: transparent floating pill showing recording status
+└── Settings Window: tabbed config panel (General, Audio, Dictionary, History, About)
+```
 
 ## Tech Stack
 
-- **Frontend**: React 19, TypeScript, Tailwind CSS 4, Vite 7
-- **Backend**: Rust, Tauri v2
-- **STT Engine**: whisper-rs (whisper.cpp bindings) with Metal GPU
-- **Audio**: cpal (capture), rubato (resampling)
-- **Database**: SQLite via rusqlite
-- **Text Injection**: Core Graphics CGEvent API (AnnotatedSession tap)
+| Layer | Technology |
+|-------|-----------|
+| Framework | Tauri v2 (Rust backend + webview frontend) |
+| Frontend | React 19, TypeScript, Tailwind CSS 4, Vite 7 |
+| STT Engine | whisper-rs (whisper.cpp bindings) with Metal GPU |
+| Cloud STT | Groq API (optional, whisper-large-v3-turbo) |
+| Audio | cpal (capture), rubato (resampling), hound (WAV encoding) |
+| Text Injection | arboard (clipboard), core-graphics (CGEvent API) |
+| Database | SQLite via rusqlite (bundled) |
+| Hotkeys | tauri-plugin-global-shortcut |
+
+## Project Structure
+
+```
+src-tauri/src/
+├── lib.rs              # App setup, hotkey registration, event loop
+├── commands.rs         # Tauri IPC commands (start/stop recording, settings, history)
+├── state.rs            # Shared application state (AppState)
+├── audio/
+│   ├── capture.rs      # Microphone capture via cpal
+│   └── resampler.rs    # Resample to 16kHz for Whisper
+├── transcribe/
+│   ├── engine.rs       # Whisper model wrapper
+│   ├── model.rs        # Model management (download, delete, status)
+│   ├── dictionary.rs   # Custom word corrections
+│   └── groq.rs         # Groq cloud transcription backend
+├── inject/
+│   ├── clipboard.rs    # Clipboard paste injection (Cmd+V)
+│   └── keyboard.rs     # Character-by-character keyboard simulation
+├── config/
+│   └── settings.rs     # Settings persistence (JSON)
+├── db/
+│   ├── history.rs      # Transcription history CRUD
+│   └── migrations.rs   # SQLite schema migrations
+├── hotkey/
+│   └── manager.rs      # Hotkey mode definitions
+├── vad/
+│   └── energy.rs       # Energy-based voice activity detection
+├── tray/
+│   └── setup.rs        # System tray icon and menu
+├── windows.rs          # Overlay window show/hide/positioning
+└── sound.rs            # Audio feedback (start/stop beeps)
+
+src/
+├── components/
+│   ├── Settings.tsx     # Tabbed settings panel
+│   ├── History.tsx      # Searchable transcription history
+│   ├── Overlay.tsx      # Recording status overlay
+│   └── PermissionStatus.tsx
+├── hooks/
+│   └── useSettings.ts   # Settings state management
+└── lib/
+    ├── commands.ts      # Tauri IPC bindings (TypeScript)
+    └── types.ts         # TypeScript types mirroring Rust structs
+```
 
 ## Data Storage
 
-All data is stored locally at:
+All data is stored locally. When using the Groq cloud backend, audio is sent to Groq's API for transcription — no other data leaves your machine.
+
 ```
 ~/Library/Application Support/com.g1tech.vox2txt/
-  settings.json      # User preferences
-  dictionary.json    # Custom word corrections
-  vox2txt.db         # Transcription history (SQLite)
-  models/            # Downloaded Whisper model files
+├── settings.json       # User preferences
+├── dictionary.json     # Custom word corrections
+├── vox2txt.db          # Transcription history (SQLite)
+└── models/             # Downloaded Whisper model files (.bin)
 ```
+
+## Permissions
+
+vox2txt requires two macOS permissions:
+
+- **Microphone** — for audio capture. The app will prompt on first launch.
+- **Accessibility** — for text injection via keyboard simulation. Grant in System Settings > Privacy & Security > Accessibility.
+
+The Settings window shows a banner when permissions are missing, with a button to trigger the system prompt.
 
 ## License
 
-Private.
+MIT

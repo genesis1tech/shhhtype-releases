@@ -13,7 +13,7 @@
     "windows": [],
     "macOSPrivateApi": true,
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: https://asset.localhost; connect-src ipc: http://ipc.localhost https://api.groq.com"
+      "csp": "default-src 'self'; script-src 'self'; connect-src 'self' https://api.groq.com https://api.lemonsqueezy.com; style-src 'self' 'unsafe-inline'"
     }
   },
   "bundle": {

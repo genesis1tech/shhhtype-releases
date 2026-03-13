@@ -9,18 +9,25 @@ import {
   deleteModel,
   checkPermissions,
   requestMicrophonePermission,
+  activateLicense,
+  getLicenseStatus,
+  deactivateLicense,
+  getGroqUsage,
 } from "../lib/commands";
 import type {
   DictionaryEntry,
   ModelStatus,
   ModelSize,
-  TranscriptionBackend,
   DownloadProgress,
   PermissionStatus as PermStatus,
+  TranscriptionBackend,
+  RewriteStyle,
+  LicenseStatus,
+  GroqUsage,
 } from "../lib/types";
 import History from "./History";
 
-type Tab = "general" | "audio" | "dictionary" | "history" | "about";
+type Tab = "general" | "audio" | "dictionary" | "history" | "license" | "about";
 
 /** Main settings window with tabbed navigation. */
 export default function Settings() {
@@ -48,6 +55,7 @@ export default function Settings() {
     { id: "audio", label: "Audio" },
     { id: "dictionary", label: "Dictionary" },
     { id: "history", label: "History" },
+    { id: "license", label: "License" },
     { id: "about", label: "About" },
   ];
 
@@ -107,24 +115,24 @@ export default function Settings() {
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-2">
-                Silence Timeout: {settings.vad_silence_secs.toFixed(0)}s
+                Silence Timeout: {settings.vad_silence_timeout.toFixed(0)}s
               </label>
               <input
                 type="range"
-                min="3"
+                min="1"
                 max="30"
                 step="1"
-                value={settings.vad_silence_secs}
+                value={settings.vad_silence_timeout}
                 onChange={(e) =>
                   save({
                     ...settings,
-                    vad_silence_secs: parseFloat(e.target.value),
+                    vad_silence_timeout: parseFloat(e.target.value),
                   })
                 }
                 className="w-full accent-blue-500"
               />
               <p className="text-gray-500 text-xs mt-1">
-                How long to wait after you stop speaking before auto-stopping (3–30s)
+                How long to keep listening after you stop speaking before auto-stopping
               </p>
             </div>
             <label className="flex items-center gap-3 cursor-pointer">
@@ -160,8 +168,10 @@ export default function Settings() {
 
         {activeTab === "history" && <History />}
 
+        {activeTab === "license" && <LicenseTab />}
+
         {activeTab === "about" && (
-          <div className="space-y-2">
+          <div className="space-y-3">
             <p className="text-white font-medium">vox2txt v0.1.0</p>
             <p className="text-gray-400 text-sm">
               Voice-to-text developer tool for macOS.
@@ -169,6 +179,16 @@ export default function Settings() {
             <p className="text-gray-400 text-sm">
               Built with Tauri + whisper.cpp + React.
             </p>
+            <div className="pt-2 space-y-1">
+              <a
+                href="https://github.com/genesis1tech/vox2txt"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-blue-400 hover:underline text-sm"
+              >
+                GitHub Repository
+              </a>
+            </div>
           </div>
         )}
       </div>
@@ -376,74 +396,10 @@ function GeneralTab({
     { value: "LargeV3Turbo", label: "Large V3 Turbo (1.6GB)" },
   ];
 
-  const isGroq = settings.transcription_backend === "Groq";
-
   return (
     <div className="space-y-4">
-      {/* Transcription backend */}
-      <div>
-        <label className="block text-sm text-gray-400 mb-1">
-          Transcription Backend
-        </label>
-        <select
-          value={settings.transcription_backend ?? "Local"}
-          onChange={(e) =>
-            save({
-              ...settings,
-              transcription_backend: e.target.value as TranscriptionBackend,
-            })
-          }
-          className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white"
-        >
-          <option value="Local">Local (on-device Whisper)</option>
-          <option value="Groq">Groq Cloud (whisper-large-v3-turbo, free)</option>
-        </select>
-        {isGroq && (
-          <p className="text-gray-500 text-xs mt-1">
-            Free tier: 8 hrs/day · Audio sent to Groq servers ·{" "}
-            <a
-              href="https://console.groq.com"
-              target="_blank"
-              rel="noreferrer"
-              className="text-blue-400 hover:underline"
-            >
-              Get API key
-            </a>
-          </p>
-        )}
-      </div>
-
-      {/* Groq API key (only when Groq selected) */}
-      {isGroq && (
-        <div>
-          <label className="block text-sm text-gray-400 mb-1">
-            Groq API Key
-          </label>
-          <input
-            type="password"
-            value={settings.groq_api_key ?? ""}
-            onChange={(e) =>
-              save({
-                ...settings,
-                groq_api_key: e.target.value || undefined,
-              })
-            }
-            placeholder="gsk_..."
-            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white font-mono text-sm placeholder-gray-600"
-          />
-          {!settings.groq_api_key && (
-            <p className="text-yellow-500 text-xs mt-1">
-              API key required to use Groq transcription.
-            </p>
-          )}
-          {settings.groq_api_key && (
-            <p className="text-green-400 text-xs mt-1">API key saved.</p>
-          )}
-        </div>
-      )}
-
-      {/* Model selector (Local only) */}
-      {!isGroq && <div>
+      {/* Model selector — only for local backend */}
+      {settings.transcription_backend === "Local" && <div>
         <label className="block text-sm text-gray-400 mb-1">
           Whisper Model
         </label>
@@ -645,6 +601,327 @@ function GeneralTab({
         />
         <span className="text-sm text-gray-300">Launch at login</span>
       </label>
+
+      {/* Divider */}
+      <hr className="border-gray-700" />
+
+      {/* Transcription Backend */}
+      <div>
+        <label className="block text-sm text-gray-400 mb-1">
+          Transcription Backend
+        </label>
+        <select
+          value={settings.transcription_backend}
+          onChange={(e) =>
+            save({
+              ...settings,
+              transcription_backend: e.target.value as TranscriptionBackend,
+            })
+          }
+          className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white"
+        >
+          <option value="Cloud">Cloud (Groq)</option>
+          <option value="Local">Local (whisper.cpp)</option>
+        </select>
+        <p className="text-gray-500 text-xs mt-1">
+          {settings.transcription_backend === "Cloud"
+            ? "Fast cloud transcription via Groq API. Requires API key."
+            : "Private, on-device transcription. No data leaves your Mac."}
+        </p>
+      </div>
+
+      {/* Groq API Key — shown when Cloud backend or rewrite is enabled */}
+      {(settings.transcription_backend === "Cloud" || settings.rewrite_enabled) && (
+        <div>
+          <label className="block text-sm text-gray-400 mb-1">
+            Groq API Key
+          </label>
+          <input
+            type="password"
+            value={settings.groq_api_key ?? ""}
+            onChange={(e) =>
+              save({
+                ...settings,
+                groq_api_key: e.target.value || null,
+              })
+            }
+            placeholder="gsk_..."
+            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-600"
+          />
+          <p className="text-gray-500 text-xs mt-1">
+            Get a free API key at{" "}
+            <a
+              href="https://console.groq.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:underline"
+            >
+              console.groq.com
+            </a>
+          </p>
+        </div>
+      )}
+
+      {/* Groq Usage — shown when Cloud backend or rewrite is enabled */}
+      {(settings.transcription_backend === "Cloud" || settings.rewrite_enabled) && (
+        <GroqUsageCard />
+      )}
+
+      {/* Divider */}
+      <hr className="border-gray-700" />
+
+      {/* AI Rewrite */}
+      <label className="flex items-center gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={settings.rewrite_enabled}
+          onChange={(e) =>
+            save({ ...settings, rewrite_enabled: e.target.checked })
+          }
+          className="w-4 h-4 accent-blue-500"
+        />
+        <div>
+          <span className="text-sm text-gray-300">
+            AI Rewrite
+          </span>
+          <p className="text-gray-500 text-xs">
+            After transcription, press {settings.rewrite_hotkey} to polish text with AI
+          </p>
+        </div>
+      </label>
+
+      {settings.rewrite_enabled && (
+        <div>
+          <label className="block text-sm text-gray-400 mb-1">
+            Rewrite Style
+          </label>
+          <select
+            value={settings.rewrite_style}
+            onChange={(e) =>
+              save({
+                ...settings,
+                rewrite_style: e.target.value as RewriteStyle,
+              })
+            }
+            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white"
+          >
+            <option value="Professional">Professional</option>
+            <option value="Casual">Casual</option>
+            <option value="Concise">Concise</option>
+            <option value="Friendly">Friendly</option>
+          </select>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Groq API usage / rate limit display card. */
+function GroqUsageCard() {
+  const [usage, setUsage] = useState<GroqUsage | null>(null);
+
+  const refresh = useCallback(() => {
+    getGroqUsage().then(setUsage).catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    // Refresh when transcription/rewrite completes
+    const unsubs = [
+      listen("transcription-complete", refresh),
+      listen("rewrite-complete", refresh),
+    ];
+    return () => { unsubs.forEach((p) => p.then((fn) => fn())); };
+  }, [refresh]);
+
+  if (!usage || !usage.updated_at) {
+    return (
+      <div className="bg-gray-800/50 border border-gray-700 rounded p-3">
+        <p className="text-gray-500 text-xs">
+          Groq usage data will appear after your first API call.
+        </p>
+      </div>
+    );
+  }
+
+  const reqPct =
+    usage.limit_requests && usage.remaining_requests != null
+      ? (usage.remaining_requests / usage.limit_requests) * 100
+      : null;
+  const tokPct =
+    usage.limit_tokens && usage.remaining_tokens != null
+      ? (usage.remaining_tokens / usage.limit_tokens) * 100
+      : null;
+
+  const barColor = (pct: number) =>
+    pct > 30 ? "bg-green-500" : pct > 10 ? "bg-yellow-500" : "bg-red-500";
+
+  return (
+    <div className="bg-gray-800/50 border border-gray-700 rounded p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-gray-300">Groq API Daily Usage</span>
+        <button
+          onClick={refresh}
+          className="text-gray-500 hover:text-gray-300 text-xs"
+        >
+          Refresh
+        </button>
+      </div>
+
+      {reqPct != null && (
+        <div>
+          <div className="flex justify-between text-xs text-gray-400 mb-0.5">
+            <span>Requests</span>
+            <span>
+              {usage.remaining_requests} / {usage.limit_requests}
+              {usage.reset_requests && (
+                <span className="text-gray-500 ml-1">
+                  (resets in {usage.reset_requests})
+                </span>
+              )}
+            </span>
+          </div>
+          <div className="w-full bg-gray-700 rounded-full h-1.5">
+            <div
+              className={`h-1.5 rounded-full transition-all ${barColor(reqPct)}`}
+              style={{ width: `${reqPct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {tokPct != null && (
+        <div>
+          <div className="flex justify-between text-xs text-gray-400 mb-0.5">
+            <span>Tokens</span>
+            <span>
+              {usage.remaining_tokens?.toLocaleString()} / {usage.limit_tokens?.toLocaleString()}
+              {usage.reset_tokens && (
+                <span className="text-gray-500 ml-1">
+                  (resets in {usage.reset_tokens})
+                </span>
+              )}
+            </span>
+          </div>
+          <div className="w-full bg-gray-700 rounded-full h-1.5">
+            <div
+              className={`h-1.5 rounded-full transition-all ${barColor(tokPct)}`}
+              style={{ width: `${tokPct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {usage.updated_at && (
+        <p className="text-gray-600 text-[10px]">
+          Last updated: {new Date(usage.updated_at).toLocaleTimeString()}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** License activation and management. */
+function LicenseTab() {
+  const [status, setStatus] = useState<LicenseStatus>("Free");
+  const [key, setKey] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    getLicenseStatus().then(setStatus).catch(console.error);
+  }, []);
+
+  const handleActivate = async () => {
+    if (!key.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await activateLicense(key.trim());
+      setStatus(result);
+      setKey("");
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeactivate = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await deactivateLicense();
+      setStatus("Free");
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <span
+          className={`inline-block h-3 w-3 rounded-full ${
+            status === "Licensed"
+              ? "bg-green-400"
+              : status === "Invalid"
+              ? "bg-red-400"
+              : "bg-gray-400"
+          }`}
+        />
+        <span className="text-sm font-medium text-white">
+          {status === "Licensed"
+            ? "Licensed"
+            : status === "Invalid"
+            ? "Invalid License"
+            : "Free Version"}
+        </span>
+      </div>
+
+      {status === "Licensed" ? (
+        <div className="space-y-3">
+          <p className="text-gray-400 text-sm">
+            Your license is active on this machine. Cloud transcription and AI
+            rewrite are unlocked.
+          </p>
+          <button
+            onClick={handleDeactivate}
+            disabled={loading}
+            className="bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white px-3 py-1.5 rounded text-sm"
+          >
+            {loading ? "Deactivating..." : "Deactivate License"}
+          </button>
+          <p className="text-gray-500 text-xs">
+            Deactivate to transfer your license to another machine.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-gray-400 text-sm">
+            Enter your license key to unlock cloud transcription and AI rewrite.
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              placeholder="Enter license key..."
+              className="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-600"
+            />
+            <button
+              onClick={handleActivate}
+              disabled={loading || !key.trim()}
+              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded text-sm"
+            >
+              {loading ? "Activating..." : "Activate"}
+            </button>
+          </div>
+          {error && <p className="text-red-400 text-xs">{error}</p>}
+        </div>
+      )}
     </div>
   );
 }

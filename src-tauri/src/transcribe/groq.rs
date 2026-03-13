@@ -1,5 +1,7 @@
+use crate::state::GroqUsage;
 use anyhow::{anyhow, Result};
 use hound::{SampleFormat, WavSpec, WavWriter};
+use parking_lot::Mutex;
 use serde::Deserialize;
 use std::io::Cursor;
 
@@ -31,7 +33,7 @@ fn encode_wav(samples: &[f32]) -> Result<Vec<u8>> {
 
 /// Send audio to Groq's Whisper API and return transcribed text.
 /// Uses whisper-large-v3-turbo (best speed/accuracy balance on Groq).
-pub fn transcribe(samples: &[f32], language: &str, api_key: &str) -> Result<String> {
+pub fn transcribe(samples: &[f32], language: &str, api_key: &str, usage: Option<&Mutex<GroqUsage>>) -> Result<String> {
     let wav_bytes = encode_wav(samples)?;
 
     let part = reqwest::blocking::multipart::Part::bytes(wav_bytes)
@@ -69,6 +71,10 @@ pub fn transcribe(samples: &[f32], language: &str, api_key: &str) -> Result<Stri
         let status = resp.status();
         let body = resp.text().unwrap_or_default();
         return Err(anyhow!("Groq API error {}: {}", status, body));
+    }
+
+    if let Some(usage) = usage {
+        crate::state::update_groq_usage(resp.headers(), usage);
     }
 
     let response: GroqResponse = resp.json()?;

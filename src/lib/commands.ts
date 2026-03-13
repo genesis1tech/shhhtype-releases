@@ -8,6 +8,9 @@ import type {
   RecordingState,
   ModelStatus,
   ModelSize,
+  RewriteStyle,
+  LicenseStatus,
+  GroqUsage,
 } from "./types";
 
 /** Start audio recording */
@@ -69,3 +72,22 @@ export const deleteModel = (modelSize: ModelSize) =>
 /** Export all history entries */
 export const exportHistory = () =>
   invoke<HistoryEntry[]>("export_history");
+
+/** Rewrite last transcription using AI */
+export const rewriteLastTranscription = (style?: RewriteStyle) =>
+  invoke<string>("rewrite_last_transcription", { style: style ?? null });
+
+/** Get Groq API rate limit usage */
+export const getGroqUsage = () => invoke<GroqUsage>("get_groq_usage");
+
+/** Activate a license key */
+export const activateLicense = (key: string) =>
+  invoke<LicenseStatus>("activate_license", { key });
+
+/** Get current license status */
+export const getLicenseStatus = () =>
+  invoke<LicenseStatus>("get_license_status");
+
+/** Deactivate current license */
+export const deactivateLicense = () =>
+  invoke<void>("deactivate_license");

@@ -4,6 +4,8 @@ mod config;
 mod db;
 mod hotkey;
 mod inject;
+mod license;
+mod rewrite;
 mod sound;
 mod state;
 mod transcribe;
@@ -50,6 +52,11 @@ pub fn run() {
             commands::get_model_status,
             commands::download_model,
             commands::delete_model,
+            commands::rewrite_last_transcription,
+            commands::get_groq_usage,
+            commands::activate_license,
+            commands::get_license_status,
+            commands::deactivate_license,
         ])
         .setup(|app| {
             // Set up the system tray
@@ -75,25 +82,13 @@ pub fn run() {
             .resizable(false)
             .decorations(false)
             .transparent(true)
-            // NOTE: do NOT use .always_on_top(true) — it sets a low Tauri-managed
-            // window level that conflicts with our manual setLevel_ for full-screen overlay.
+            .always_on_top(true)
             .skip_taskbar(true)
             .visible(false)
             .focused(false)
             .build()?;
 
             overlay.set_ignore_cursor_events(true)?;
-
-            // Swizzle the overlay NSWindow to NSPanel so it can appear over
-            // full-screen apps. Only NSPanel is allowed in full-screen Spaces.
-            #[cfg(target_os = "macos")]
-            {
-                use cocoa::base::id;
-                let ns_window: id = overlay.ns_window().unwrap() as id;
-                unsafe {
-                    windows::swizzle_to_nspanel(ns_window);
-                }
-            }
 
             // Position top-center below menu bar
             if let Ok(Some(monitor)) = overlay.primary_monitor() {
@@ -107,6 +102,18 @@ pub fn run() {
             // Register global hotkey for recording
             let shortcut_str = state.config.read().shortcut.clone();
             register_hotkey(app, &shortcut_str);
+
+            // Register rewrite hotkey
+            let rewrite_shortcut = state.config.read().rewrite_hotkey.clone();
+            register_rewrite_hotkey(app, &rewrite_shortcut);
+
+            // Show welcome/onboarding on first launch
+            let onboarding_flag = state.data_dir.join(".onboarding_complete");
+            if !onboarding_flag.exists() {
+                windows::show_welcome(app.handle());
+                // Mark onboarding as shown (user can still go through it)
+                let _ = std::fs::write(&onboarding_flag, "1");
+            }
 
             log::info!("vox2txt initialized successfully");
             Ok(())
@@ -195,6 +202,21 @@ fn register_hotkey(app: &tauri::App, shortcut_str: &str) {
                             if let Err(e) = result {
                                 log::error!("Text injection failed: {}", e);
                             }
+
+                            // If rewrite is enabled, keep overlay visible with
+                            // click-through disabled so user can click "Rewrite?"
+                            if config.rewrite_enabled && config.groq_api_key.is_some() {
+                                windows::enable_overlay_interaction(&app);
+                                let _ = app.emit("recording-state-changed", "idle");
+                                let app_for_hide = app.clone();
+                                std::thread::spawn(move || {
+                                    std::thread::sleep(std::time::Duration::from_secs(3));
+                                    windows::disable_overlay_interaction(&app_for_hide);
+                                    windows::hide_overlay(&app_for_hide);
+                                });
+                                // Skip the normal hide below
+                                return;
+                            }
                         }
                         Err(e) => log::error!("Transcription failed: {}", e),
                         _ => {}
@@ -208,6 +230,75 @@ fn register_hotkey(app: &tauri::App, shortcut_str: &str) {
         log::error!("Failed to register hotkey '{}': {}", shortcut_str, e);
     } else {
         log::info!("Hotkey registered: {}", shortcut_str);
+    }
+}
+
+/// Register the AI rewrite hotkey.
+fn register_rewrite_hotkey(app: &tauri::App, shortcut_str: &str) {
+    if let Err(e) = app.handle().global_shortcut().on_shortcut(
+        shortcut_str,
+        |app_handle, _shortcut, event| {
+            if event.state != ShortcutState::Pressed {
+                return;
+            }
+
+            let state = app_handle.state::<Arc<AppState>>();
+
+            // Only rewrite when idle and there's a last transcription
+            if state.get_state() != "idle" {
+                return;
+            }
+            if state.last_transcription.lock().is_none() {
+                return;
+            }
+
+            let config = state.config.read().clone();
+            if !config.rewrite_enabled {
+                log::info!("Rewrite hotkey pressed but rewrite is disabled");
+                return;
+            }
+            if config.groq_api_key.as_deref().unwrap_or("").is_empty() {
+                log::warn!("Rewrite hotkey pressed but no Groq API key set");
+                return;
+            }
+
+            log::info!("Rewrite hotkey pressed, rewriting last transcription");
+            let app = app_handle.clone();
+            let state = Arc::clone(state.inner());
+            std::thread::spawn(move || {
+                let _ = app.emit("recording-state-changed", "transcribing");
+                windows::show_overlay(&app);
+                let _ = app.emit("rewrite-started", ());
+
+                let text = state.last_transcription.lock().clone().unwrap_or_default();
+                let config = state.config.read().clone();
+
+                match rewrite::rewrite_text(&text, &config.rewrite_style, config.groq_api_key.as_deref().unwrap_or(""), Some(&state.groq_usage)) {
+                    Ok(rewritten) => {
+                        log::info!("Rewrite complete: {}", rewritten);
+                        // Undo original paste, inject rewritten text
+                        if let Err(e) = commands::undo_and_inject(&rewritten, &config.injection_method) {
+                            log::error!("Rewrite injection failed: {}", e);
+                        }
+                        *state.last_transcription.lock() = Some(rewritten.clone());
+                        let _ = app.emit("rewrite-complete", &rewritten);
+                    }
+                    Err(e) => {
+                        log::error!("Rewrite failed: {}", e);
+                        let _ = app.emit("rewrite-error", e.to_string());
+                    }
+                }
+
+                let _ = app.emit("recording-state-changed", "idle");
+                // Brief delay before hiding overlay so user sees result
+                std::thread::sleep(std::time::Duration::from_millis(1500));
+                windows::hide_overlay(&app);
+            });
+        },
+    ) {
+        log::error!("Failed to register rewrite hotkey '{}': {}", shortcut_str, e);
+    } else {
+        log::info!("Rewrite hotkey registered: {}", shortcut_str);
     }
 }
 

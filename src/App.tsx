@@ -2,6 +2,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useState } from "react";
 import Overlay from "./components/Overlay";
 import Settings from "./components/Settings";
+import Welcome from "./components/Welcome";
 import "./styles/globals.css";
 
 /** Route to the correct component based on window label. */
@@ -15,9 +16,12 @@ function App() {
 
   if (windowLabel === null) return null;
 
-  // The overlay window shows the floating recording pill
   if (windowLabel === "overlay") {
     return <Overlay />;
+  }
+
+  if (windowLabel === "welcome") {
+    return <Welcome />;
   }
 
   // Default: settings window
