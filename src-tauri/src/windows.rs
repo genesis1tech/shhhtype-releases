@@ -1,10 +1,11 @@
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
-/// macOS window level for the overlay panel — NSMainMenuWindowLevel (24) + 1.
-/// Once swizzled to NSPanel, a modest level is sufficient since NSPanel can
-/// natively appear over full-screen Spaces.
+/// macOS window level for the overlay panel — NSPopUpMenuWindowLevel (101).
+/// This ensures the overlay renders above all normal windows, floating panels,
+/// and modal dialogs. Combined with NSPanel swizzle, it also appears over
+/// full-screen Spaces.
 #[cfg(target_os = "macos")]
-pub const OVERLAY_WINDOW_LEVEL: i64 = 25;
+pub const OVERLAY_WINDOW_LEVEL: i64 = 101;
 
 /// Swizzle a Tauri-created NSWindow into an NSPanel at runtime.
 ///
