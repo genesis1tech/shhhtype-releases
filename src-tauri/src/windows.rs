@@ -115,7 +115,7 @@ pub fn toggle_settings(app: &AppHandle) {
             "settings",
             WebviewUrl::App("index.html".into()),
         )
-        .title("vox2txt Settings")
+        .title("ShhhType Settings")
         .inner_size(700.0, 500.0)
         .resizable(true)
         .center()
@@ -133,7 +133,7 @@ pub fn show_welcome(app: &AppHandle) {
         "welcome",
         WebviewUrl::App("index.html".into()),
     )
-    .title("Welcome to vox2txt")
+    .title("Welcome to ShhhType")
     .inner_size(600.0, 520.0)
     .resizable(false)
     .center()

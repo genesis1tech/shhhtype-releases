@@ -4444,6 +4444,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "shhhtype"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arboard",
+ "chrono",
+ "cocoa",
+ "core-foundation 0.10.1",
+ "core-graphics",
+ "cpal",
+ "dirs 6.0.0",
+ "env_logger",
+ "futures-util",
+ "gethostname 0.5.0",
+ "hound",
+ "log",
+ "objc",
+ "parking_lot",
+ "reqwest 0.12.28",
+ "rubato",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-autostart",
+ "tauri-plugin-clipboard-manager",
+ "tauri-plugin-global-shortcut",
+ "tauri-plugin-notification",
+ "thiserror 2.0.18",
+ "tokio",
+ "uuid",
+ "whisper-rs",
+]
+
+[[package]]
 name = "shlex"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5614,42 +5650,6 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
-
-[[package]]
-name = "vox2txt"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "arboard",
- "chrono",
- "cocoa",
- "core-foundation 0.10.1",
- "core-graphics",
- "cpal",
- "dirs 6.0.0",
- "env_logger",
- "futures-util",
- "gethostname 0.5.0",
- "hound",
- "log",
- "objc",
- "parking_lot",
- "reqwest 0.12.28",
- "rubato",
- "rusqlite",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-autostart",
- "tauri-plugin-clipboard-manager",
- "tauri-plugin-global-shortcut",
- "tauri-plugin-notification",
- "thiserror 2.0.18",
- "tokio",
- "uuid",
- "whisper-rs",
-]
 
 [[package]]
 name = "vswhom"

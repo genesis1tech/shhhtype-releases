@@ -1,12 +1,12 @@
 [package]
-name = "vox2txt"
+name = "shhhtype"
 version = "0.1.0"
 description = "Voice-to-text developer tool for macOS"
 authors = ["g1tech"]
 edition = "2021"
 
 [lib]
-name = "vox2txt_lib"
+name = "shhhtype_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

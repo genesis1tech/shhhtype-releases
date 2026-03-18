@@ -3,8 +3,8 @@
 <plist version="1.0">
 <dict>
     <key>NSMicrophoneUsageDescription</key>
-    <string>vox2txt needs microphone access to capture speech for transcription.</string>
+    <string>ShhhType needs microphone access to capture speech for transcription.</string>
     <key>NSAccessibilityUsageDescription</key>
-    <string>vox2txt needs accessibility access to inject transcribed text into other applications.</string>
+    <string>ShhhType needs accessibility access to inject transcribed text into other applications.</string>
 </dict>
 </plist>

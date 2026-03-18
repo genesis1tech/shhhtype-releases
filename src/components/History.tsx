@@ -21,7 +21,7 @@ export default function History() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `vox2txt-history-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `shhhtype-history-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {

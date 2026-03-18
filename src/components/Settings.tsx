@@ -61,7 +61,7 @@ export default function Settings() {
 
   return (
     <div className="settings-window min-h-screen p-6">
-      <h1 className="text-xl font-bold mb-6">vox2txt Settings</h1>
+      <h1 className="text-xl font-bold mb-6">ShhhType Settings</h1>
 
       {/* Permission status banner */}
       <PermissionBanner />
@@ -172,7 +172,7 @@ export default function Settings() {
 
         {activeTab === "about" && (
           <div className="space-y-3">
-            <p className="text-white font-medium">vox2txt v0.1.0</p>
+            <p className="text-white font-medium">ShhhType v0.1.0</p>
             <p className="text-gray-400 text-sm">
               Voice-to-text developer tool for macOS.
             </p>
@@ -181,7 +181,7 @@ export default function Settings() {
             </p>
             <div className="pt-2 space-y-1">
               <a
-                href="https://github.com/genesis1tech/vox2txt"
+                href="https://github.com/genesis1tech/shhhtype"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block text-blue-400 hover:underline text-sm"

@@ -138,7 +138,7 @@ impl AppState {
     pub fn new() -> Self {
         let data_dir = dirs::data_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join("com.g1tech.vox2txt");
+            .join("com.g1tech.shhhtype");
 
         std::fs::create_dir_all(&data_dir).ok();
 
@@ -174,7 +174,7 @@ impl AppState {
     }
 
     pub fn init_db(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let db_path = self.data_dir.join("vox2txt.db");
+        let db_path = self.data_dir.join("shhhtype.db");
         let conn = Connection::open(db_path)?;
         crate::db::migrations::run_migrations(&conn)?;
         *self.db.lock() = Some(conn);

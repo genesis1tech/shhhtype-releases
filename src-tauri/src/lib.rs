@@ -130,11 +130,11 @@ pub fn run() {
                 let _ = std::fs::write(&onboarding_flag, "1");
             }
 
-            log::info!("vox2txt initialized successfully");
+            log::info!("ShhhType initialized successfully");
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("error while running vox2txt");
+        .expect("error while running ShhhType");
 }
 
 /// Register (or re-register) the global hotkey.
@@ -367,7 +367,7 @@ fn send_notification(app: &tauri::AppHandle, text: &str) {
     let _ = app
         .notification()
         .builder()
-        .title("vox2txt")
+        .title("ShhhType")
         .body(preview)
         .show();
 }

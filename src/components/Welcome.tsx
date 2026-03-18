@@ -76,7 +76,7 @@ export default function Welcome() {
 
   return (
     <div className="settings-window min-h-screen p-8 flex flex-col">
-      <h1 className="text-2xl font-bold mb-2">Welcome to vox2txt</h1>
+      <h1 className="text-2xl font-bold mb-2">Welcome to ShhhType</h1>
       <p className="text-gray-400 mb-6">Let's get you set up in a few quick steps.</p>
 
       {/* Step indicators */}
@@ -97,7 +97,7 @@ export default function Welcome() {
           <div className="space-y-4">
             <h2 className="text-lg font-medium">Microphone Access</h2>
             <p className="text-gray-400 text-sm">
-              vox2txt needs microphone access to capture your voice.
+              ShhhType needs microphone access to capture your voice.
             </p>
             <div className="flex items-center gap-3">
               <span
@@ -125,7 +125,7 @@ export default function Welcome() {
           <div className="space-y-4">
             <h2 className="text-lg font-medium">Accessibility Permission</h2>
             <p className="text-gray-400 text-sm">
-              vox2txt needs accessibility access to type text into your apps.
+              ShhhType needs accessibility access to type text into your apps.
             </p>
             <div className="flex items-center gap-3">
               <span
@@ -143,7 +143,7 @@ export default function Welcome() {
                 <ol className="list-decimal list-inside space-y-1 text-gray-400">
                   <li>Open <strong>System Settings</strong></li>
                   <li>Go to <strong>Privacy & Security &gt; Accessibility</strong></li>
-                  <li>Enable <strong>vox2txt</strong> in the list</li>
+                  <li>Enable <strong>ShhhType</strong> in the list</li>
                 </ol>
               </div>
             )}

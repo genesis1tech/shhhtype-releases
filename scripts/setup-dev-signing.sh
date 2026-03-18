@@ -1,12 +1,12 @@
 #!/bin/bash
-# Setup a self-signed code signing certificate for vox2txt development.
+# Setup a self-signed code signing certificate for ShhhType development.
 # Run this once per machine. The certificate persists in your login keychain
 # and ensures macOS TCC permissions (Input Monitoring, Accessibility) survive
 # across rebuilds.
 
 set -euo pipefail
 
-CERT_NAME="Vox2txt Dev"
+CERT_NAME="ShhhType Dev"
 
 # Check if certificate already exists
 if security find-identity -v -p codesigning 2>/dev/null | grep -q "$CERT_NAME"; then
@@ -35,14 +35,14 @@ openssl pkcs12 -export \
     -out "$TMP_DIR/dev.p12" \
     -inkey "$TMP_DIR/dev.key" \
     -in "$TMP_DIR/dev.crt" \
-    -passout pass:vox2txt \
+    -passout pass:shhhtype \
     -legacy 2>/dev/null
 
 # 3. Import into login keychain
 security import "$TMP_DIR/dev.p12" \
     -k ~/Library/Keychains/login.keychain-db \
     -T /usr/bin/codesign \
-    -P "vox2txt"
+    -P "shhhtype"
 
 # 4. Trust the certificate for code signing (user level, no sudo needed)
 security add-trusted-cert -r trustRoot \
