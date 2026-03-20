@@ -98,6 +98,13 @@ export interface GroqUsage {
   updated_at: string | null;
 }
 
+/** Update info from GitHub releases */
+export interface UpdateInfo {
+  tag_name: string;
+  html_url: string;
+  name: string;
+}
+
 /** Model download progress event payload */
 export interface DownloadProgress {
   model: string;

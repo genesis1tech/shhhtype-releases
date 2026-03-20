@@ -547,9 +547,22 @@ pub fn rewrite_last_transcription(
     };
 
     let rewrite_style = style.unwrap_or(config.rewrite_style);
+
+    // Check for skill trigger
+    let (rewrite_input, custom_prompt) = {
+        let skills = state.skills.lock();
+        match crate::skills::detect_skill(&text, &skills) {
+            Some(skill_match) => {
+                log::info!("Skill detected: {}", skill_match.skill.name);
+                (skill_match.cleaned_text, Some(skill_match.skill.system_prompt))
+            }
+            None => (text, None),
+        }
+    };
+
     log::info!("Rewriting {} segment(s) with style: {:?}", if is_multi { "multiple" } else { "single" }, rewrite_style);
 
-    let rewritten = crate::rewrite::rewrite_text(&text, &rewrite_style, api_key, Some(&state.groq_usage))
+    let rewritten = crate::rewrite::rewrite_text(&rewrite_input, &rewrite_style, api_key, Some(&state.groq_usage), custom_prompt.as_deref())
         .map_err(|e| format!("Rewrite failed: {}", e))?;
 
     // Clear composition buffer after successful rewrite
@@ -635,10 +648,23 @@ pub fn rewrite_and_inject(
     };
 
     let rewrite_style = style.unwrap_or(config.rewrite_style);
+
+    // Check for skill trigger
+    let (rewrite_input, custom_prompt) = {
+        let skills = state.skills.lock();
+        match crate::skills::detect_skill(&text, &skills) {
+            Some(skill_match) => {
+                log::info!("Skill detected: {}", skill_match.skill.name);
+                (skill_match.cleaned_text, Some(skill_match.skill.system_prompt))
+            }
+            None => (text, None),
+        }
+    };
+
     log::info!("Rewrite-and-inject: {} segment(s), {} chars, style: {:?}",
         if is_multi { "multiple" } else { "single" }, char_count, rewrite_style);
 
-    let rewritten = crate::rewrite::rewrite_text(&text, &rewrite_style, api_key, Some(&state.groq_usage))
+    let rewritten = crate::rewrite::rewrite_text(&rewrite_input, &rewrite_style, api_key, Some(&state.groq_usage), custom_prompt.as_deref())
         .map_err(|e| format!("Rewrite failed: {}", e))?;
 
     // Select-back and replace the original injected text
@@ -702,6 +728,44 @@ pub fn clear_composition(app: AppHandle, state: State<'_, Arc<AppState>>) {
 #[tauri::command]
 pub fn get_composition_count(state: State<'_, Arc<AppState>>) -> usize {
     state.composition.lock().len()
+}
+
+#[tauri::command]
+pub fn open_url(url: String) {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open").arg(&url).spawn();
+    }
+}
+
+#[tauri::command]
+pub fn check_for_updates(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+) -> Option<crate::update::LatestRelease> {
+    match crate::update::check_for_update() {
+        Ok(Some(release)) => {
+            *state.latest_release.lock() = Some(release.clone());
+            let _ = app.emit("update-available", &release);
+            crate::tray::setup::show_update_available(&app, &release);
+            Some(release)
+        }
+        Ok(None) => {
+            *state.latest_release.lock() = None;
+            None
+        }
+        Err(e) => {
+            log::error!("Update check failed: {}", e);
+            None
+        }
+    }
+}
+
+#[tauri::command]
+pub fn get_update_info(
+    state: State<'_, Arc<AppState>>,
+) -> Option<crate::update::LatestRelease> {
+    state.latest_release.lock().clone()
 }
 
 /// Audio input device info returned to the frontend.

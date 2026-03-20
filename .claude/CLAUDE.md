@@ -2,6 +2,11 @@
 
 ## Recent Changes
 
+### minor: add voice-triggered rewrite skills with LinkedIn skill - 2026-03-20
+- Branch: `minor/skill-loader`
+- PR: https://github.com/genesis1tech/vox2txt/pull/36
+- Summary: Extensible skill system — `.md` files with YAML frontmatter define custom rewrite prompts triggered by voice commands (e.g. "/linkedin skill"). Bundled LinkedIn post optimizer skill. Trigger detection normalizes spoken variants, integrated into hotkey and command rewrite paths.
+
 ### minor: hotkey settings UX & transcription perf optimizations - 2026-03-19
 - Branch: `minor/hotkey-settings-and-transcription-perf`
 - PR: https://github.com/genesis1tech/vox2txt/pull/31

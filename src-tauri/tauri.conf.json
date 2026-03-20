@@ -13,7 +13,7 @@
     "windows": [],
     "macOSPrivateApi": true,
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; connect-src 'self' https://api.groq.com https://api.lemonsqueezy.com; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; script-src 'self'; connect-src 'self' https://api.groq.com https://api.lemonsqueezy.com https://api.github.com; style-src 'self' 'unsafe-inline'"
     }
   },
   "bundle": {
@@ -28,7 +28,13 @@
     ],
     "macOS": {
       "entitlements": "Entitlements.plist",
-      "signingIdentity": "ShhhType Dev"
+      "signingIdentity": "ShhhType Dev",
+      "dmg": {
+        "background": "icons/dmg-background.png",
+        "windowSize": { "width": 660, "height": 400 },
+        "appPosition": { "x": 180, "y": 170 },
+        "applicationFolderPosition": { "x": 480, "y": 170 }
+      }
     }
   }
 }

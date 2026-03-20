@@ -6,10 +6,12 @@ mod hotkey;
 mod inject;
 mod license;
 mod rewrite;
+mod skills;
 mod sound;
 mod state;
 mod transcribe;
 mod tray;
+mod update;
 mod vad;
 mod windows;
 
@@ -63,6 +65,9 @@ pub fn run() {
             commands::get_composition_count,
             commands::list_audio_devices,
             commands::restart_app,
+            commands::open_url,
+            commands::check_for_updates,
+            commands::get_update_info,
         ])
         .setup(|app| {
             // Set up the system tray
@@ -72,6 +77,10 @@ pub fn run() {
             let app_handle = app.handle().clone();
             let state = app_handle.state::<Arc<AppState>>();
             state.init_db()?;
+
+            // Ensure default skills exist and load them
+            skills::ensure_default_skills(&state.data_dir);
+            *state.skills.lock() = skills::load_skills(&state.data_dir);
 
             // Request accessibility permission on startup so the app appears in
             // System Settings > Accessibility. Microphone permission is requested
@@ -132,6 +141,25 @@ pub fn run() {
                 windows::show_welcome(app.handle());
                 // Mark onboarding as shown (user can still go through it)
                 let _ = std::fs::write(&onboarding_flag, "1");
+            }
+
+            // Check for updates in the background after a short delay
+            {
+                let app_for_update = app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(5));
+                    let state = app_for_update.state::<Arc<AppState>>();
+                    match update::check_for_update() {
+                        Ok(Some(release)) => {
+                            log::info!("Update available: {}", release.tag_name);
+                            *state.latest_release.lock() = Some(release.clone());
+                            let _ = app_for_update.emit("update-available", &release);
+                            tray::setup::show_update_available(&app_for_update, &release);
+                        }
+                        Ok(None) => log::info!("App is up to date"),
+                        Err(e) => log::warn!("Update check failed: {}", e),
+                    }
+                });
             }
 
             log::info!("ShhhType initialized successfully");
@@ -314,7 +342,19 @@ pub fn register_rewrite_hotkey(app: &tauri::AppHandle, shortcut_str: &str) {
                     }
                 };
 
-                match rewrite::rewrite_text(&text, &config.rewrite_style, config.groq_api_key.as_deref().unwrap_or(""), Some(&state.groq_usage)) {
+                // Check for skill trigger in the text
+                let (rewrite_text_input, custom_prompt) = {
+                    let skills = state.skills.lock();
+                    match skills::detect_skill(&text, &skills) {
+                        Some(skill_match) => {
+                            log::info!("Skill detected: {}", skill_match.skill.name);
+                            (skill_match.cleaned_text, Some(skill_match.skill.system_prompt))
+                        }
+                        None => (text.clone(), None),
+                    }
+                };
+
+                match rewrite::rewrite_text(&rewrite_text_input, &config.rewrite_style, config.groq_api_key.as_deref().unwrap_or(""), Some(&state.groq_usage), custom_prompt.as_deref()) {
                     Ok(rewritten) => {
                         log::info!("Rewrite complete (multi={}, chars={}): {}", is_multi, char_count, rewritten);
 

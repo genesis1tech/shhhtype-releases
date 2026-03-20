@@ -145,6 +145,10 @@ pub struct AppState {
     /// Generation counter for overlay visibility — stale hide timers check this
     /// to avoid hiding the overlay when a new action (recording, rewrite) has started.
     pub overlay_generation: AtomicU32,
+    /// Latest available release from GitHub, if newer than current version.
+    pub latest_release: Mutex<Option<crate::update::LatestRelease>>,
+    /// Loaded rewrite skills.
+    pub skills: Mutex<Vec<crate::skills::Skill>>,
 }
 
 impl AppState {
@@ -173,6 +177,8 @@ impl AppState {
             composition: Mutex::new(CompositionBuffer::new()),
             dictionary_cache: Mutex::new(None),
             overlay_generation: AtomicU32::new(0),
+            latest_release: Mutex::new(None),
+            skills: Mutex::new(Vec::new()),
         }
     }
 

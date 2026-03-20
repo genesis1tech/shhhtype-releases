@@ -39,11 +39,16 @@ fn system_prompt(style: &RewriteStyle) -> &'static str {
 }
 
 /// Rewrite text using Groq's Llama 3.3 70B model.
-pub fn rewrite_text(text: &str, style: &RewriteStyle, api_key: &str, usage: Option<&Mutex<GroqUsage>>) -> Result<String> {
+/// When `custom_prompt` is `Some`, it overrides the style-based system prompt (used by skills).
+pub fn rewrite_text(text: &str, style: &RewriteStyle, api_key: &str, usage: Option<&Mutex<GroqUsage>>, custom_prompt: Option<&str>) -> Result<String> {
+    let prompt = match custom_prompt {
+        Some(p) => p,
+        None => system_prompt(style),
+    };
     let body = serde_json::json!({
         "model": "llama-3.3-70b-versatile",
         "messages": [
-            { "role": "system", "content": system_prompt(style) },
+            { "role": "system", "content": prompt },
             { "role": "user", "content": text }
         ],
         "temperature": 0.3,

@@ -1,0 +1,299 @@
+use std::path::{Path, PathBuf};
+
+/// A rewrite skill loaded from a `.md` file with YAML frontmatter.
+#[derive(Clone, Debug)]
+pub struct Skill {
+    pub name: String,
+    pub trigger: String,
+    pub description: String,
+    pub system_prompt: String,
+}
+
+/// Result of detecting a skill trigger in transcription text.
+pub struct SkillMatch {
+    pub skill: Skill,
+    pub cleaned_text: String,
+}
+
+/// Load all skills from `.md` files in `{data_dir}/skills/`.
+pub fn load_skills(data_dir: &Path) -> Vec<Skill> {
+    let skills_dir = data_dir.join("skills");
+    if !skills_dir.exists() {
+        return Vec::new();
+    }
+
+    let mut skills = Vec::new();
+    let entries = match std::fs::read_dir(&skills_dir) {
+        Ok(e) => e,
+        Err(e) => {
+            log::warn!("Failed to read skills directory: {}", e);
+            return Vec::new();
+        }
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("md") {
+            continue;
+        }
+        match parse_skill_file(&path) {
+            Ok(skill) => {
+                log::info!("Loaded skill: {} (trigger: {})", skill.name, skill.trigger);
+                skills.push(skill);
+            }
+            Err(e) => {
+                log::warn!("Failed to parse skill file {}: {}", path.display(), e);
+            }
+        }
+    }
+
+    skills
+}
+
+/// Parse a single skill `.md` file with YAML frontmatter.
+fn parse_skill_file(path: &PathBuf) -> Result<Skill, String> {
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| format!("read error: {}", e))?;
+
+    // Expect YAML frontmatter between --- delimiters
+    if !content.starts_with("---") {
+        return Err("missing YAML frontmatter".into());
+    }
+
+    let after_first = &content[3..];
+    let end_idx = after_first.find("---")
+        .ok_or("missing closing --- in frontmatter")?;
+
+    let frontmatter = &after_first[..end_idx];
+    let body = after_first[end_idx + 3..].trim();
+
+    if body.is_empty() {
+        return Err("empty system prompt".into());
+    }
+
+    // Simple YAML parsing for known keys
+    let mut name = None;
+    let mut trigger = None;
+    let mut description = None;
+
+    for line in frontmatter.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if let Some(val) = line.strip_prefix("name:") {
+            name = Some(val.trim().to_string());
+        } else if let Some(val) = line.strip_prefix("trigger:") {
+            trigger = Some(val.trim().to_string());
+        } else if let Some(val) = line.strip_prefix("description:") {
+            description = Some(val.trim().to_string());
+        }
+    }
+
+    Ok(Skill {
+        name: name.ok_or("missing 'name' in frontmatter")?,
+        trigger: trigger.ok_or("missing 'trigger' in frontmatter")?,
+        description: description.unwrap_or_default(),
+        system_prompt: body.to_string(),
+    })
+}
+
+/// Normalize common voice transcription variants of slash commands.
+/// "slash linkedin skill ..." → "/linkedin skill ..."
+/// "Slash LinkedIn skill ..." → "/linkedin skill ..."
+fn normalize_trigger_prefix(text: &str) -> String {
+    // Case-insensitive check for leading "slash "
+    if text.len() >= 6 && text[..6].eq_ignore_ascii_case("slash ") {
+        format!("/{}", &text[6..])
+    } else {
+        text.to_string()
+    }
+}
+
+/// Detect if text starts with any skill trigger. Returns the matched skill and cleaned text.
+///
+/// Handles these voice-to-text variants:
+/// - `/linkedin skill ...` → matches trigger `/linkedin`
+/// - `/linkedin ...` → matches
+/// - `slash linkedin skill ...` → normalized to `/linkedin skill`, matches
+/// - `Slash LinkedIn skill ...` → case-insensitive, matches
+pub fn detect_skill(text: &str, skills: &[Skill]) -> Option<SkillMatch> {
+    let normalized = normalize_trigger_prefix(text);
+    let lower = normalized.to_lowercase();
+
+    for skill in skills {
+        let trigger_lower = skill.trigger.to_lowercase();
+
+        // Check if text starts with the trigger
+        if !lower.starts_with(&trigger_lower) {
+            continue;
+        }
+
+        let after_trigger = &normalized[trigger_lower.len()..];
+
+        // After the trigger, expect end-of-string, space, or " skill "
+        let cleaned = if after_trigger.is_empty() {
+            String::new()
+        } else if let Some(rest) = after_trigger.strip_prefix(' ') {
+            // Strip optional "skill " prefix after the trigger
+            if rest.len() >= 6 && rest[..6].eq_ignore_ascii_case("skill ") {
+                rest[6..].to_string()
+            } else if rest.eq_ignore_ascii_case("skill") {
+                // Just "/linkedin skill" with nothing after
+                String::new()
+            } else {
+                rest.to_string()
+            }
+        } else {
+            // Trigger doesn't end at a word boundary
+            continue;
+        };
+
+        log::info!("Skill detected: {} (trigger: {})", skill.name, skill.trigger);
+        return Some(SkillMatch {
+            skill: skill.clone(),
+            cleaned_text: cleaned.trim().to_string(),
+        });
+    }
+
+    None
+}
+
+/// Ensure the default bundled skills exist in `{data_dir}/skills/`.
+pub fn ensure_default_skills(data_dir: &Path) {
+    let skills_dir = data_dir.join("skills");
+    if let Err(e) = std::fs::create_dir_all(&skills_dir) {
+        log::error!("Failed to create skills directory: {}", e);
+        return;
+    }
+
+    let linkedin_path = skills_dir.join("linkedin.md");
+    if !linkedin_path.exists() {
+        if let Err(e) = std::fs::write(&linkedin_path, LINKEDIN_SKILL_CONTENT) {
+            log::error!("Failed to write default linkedin skill: {}", e);
+        } else {
+            log::info!("Created default skill: {}", linkedin_path.display());
+        }
+    }
+}
+
+const LINKEDIN_SKILL_CONTENT: &str = r#"---
+name: linkedin
+trigger: /linkedin
+description: Rewrite as a high-performing LinkedIn post
+---
+You are a LinkedIn Post Optimizer. Transform the user's raw spoken text into a high-performing LinkedIn post.
+
+## Core Rules
+
+1. **Preserve the user's message** — do not invent facts, claims, or experiences
+2. **Write in first person** — match the user's voice and perspective
+3. **No hashtags** — LinkedIn's algorithm no longer boosts them
+4. **No emojis in the first line** — the hook must work with words alone
+5. **Keep it under 1300 characters** — optimal for mobile feed visibility
+6. **One idea per post** — remove tangents, keep it focused
+
+## Post Structure (HVCTA Framework)
+
+1. **Hook** (line 1): Pattern-interrupt opening that stops the scroll. Use one of these patterns:
+   - Contrarian: "Most people think X. They're wrong."
+   - Confession: "I almost [failed/quit/gave up] on X."
+   - Curiosity gap: "The one thing about X nobody talks about:"
+   - Bold claim: "X changed everything about how I Y."
+   - Question: "Why does everyone ignore X?"
+
+2. **Value** (lines 2-8): The insight, story, or lesson. Use short paragraphs (1-2 sentences each). Add line breaks between paragraphs for readability.
+
+3. **CTA** (last line): Soft engagement prompt. Examples:
+   - "What's your take?"
+   - "Have you experienced this?"
+   - "Drop your best tip below."
+   - "Agree or disagree?"
+
+## Formatting Rules
+
+- First line: hook only, no emoji, end with period or colon
+- Blank line after hook
+- Short paragraphs (1-3 sentences max)
+- Blank line between each paragraph
+- Use "→" or "•" for lists instead of numbers (feels less formal)
+- Last line: CTA as its own paragraph
+
+## Tone
+
+- Conversational but credible
+- Confident without being arrogant
+- Specific over vague ("increased revenue 34%" vs "grew the business")
+- Active voice always
+
+## Output
+
+Return ONLY the LinkedIn post text. No explanations, no meta-commentary, no "Here's your post:" prefix."#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_skill() -> Skill {
+        Skill {
+            name: "linkedin".into(),
+            trigger: "/linkedin".into(),
+            description: "test".into(),
+            system_prompt: "test prompt".into(),
+        }
+    }
+
+    #[test]
+    fn detect_slash_trigger() {
+        let skills = vec![test_skill()];
+        let m = detect_skill("/linkedin hello world", &skills).unwrap();
+        assert_eq!(m.skill.name, "linkedin");
+        assert_eq!(m.cleaned_text, "hello world");
+    }
+
+    #[test]
+    fn detect_slash_skill_trigger() {
+        let skills = vec![test_skill()];
+        let m = detect_skill("/linkedin skill hello world", &skills).unwrap();
+        assert_eq!(m.cleaned_text, "hello world");
+    }
+
+    #[test]
+    fn detect_spoken_slash() {
+        let skills = vec![test_skill()];
+        let m = detect_skill("slash linkedin skill hello world", &skills).unwrap();
+        assert_eq!(m.cleaned_text, "hello world");
+    }
+
+    #[test]
+    fn detect_case_insensitive() {
+        let skills = vec![test_skill()];
+        let m = detect_skill("Slash LinkedIn Skill Hello World", &skills).unwrap();
+        assert_eq!(m.cleaned_text, "Hello World");
+    }
+
+    #[test]
+    fn no_match_without_trigger() {
+        let skills = vec![test_skill()];
+        assert!(detect_skill("hello world", &skills).is_none());
+    }
+
+    #[test]
+    fn no_match_partial_trigger() {
+        let skills = vec![test_skill()];
+        assert!(detect_skill("/linkedinprofile hello", &skills).is_none());
+    }
+
+    #[test]
+    fn parse_frontmatter() {
+        let dir = std::env::temp_dir().join("shhhtype_test_skills");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("test.md");
+        std::fs::write(&path, "---\nname: test\ntrigger: /test\ndescription: A test skill\n---\nYou are a test prompt.").unwrap();
+        let skill = parse_skill_file(&path).unwrap();
+        assert_eq!(skill.name, "test");
+        assert_eq!(skill.trigger, "/test");
+        assert_eq!(skill.system_prompt, "You are a test prompt.");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

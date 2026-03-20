@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useSettings } from "../hooks/useSettings";
 import {
@@ -15,6 +16,8 @@ import {
   getGroqUsage,
   listAudioDevices,
   restartApp,
+  getUpdateInfo,
+  checkForUpdates,
 } from "../lib/commands";
 import type {
   AudioDevice,
@@ -27,6 +30,7 @@ import type {
   RewriteStyle,
   LicenseStatus,
   GroqUsage,
+  UpdateInfo,
 } from "../lib/types";
 import History from "./History";
 
@@ -1070,6 +1074,34 @@ function LicenseTab() {
 
 /** About tab. */
 function AboutTab() {
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  useEffect(() => {
+    getUpdateInfo().then(setUpdateInfo);
+
+    const unlisten = listen<UpdateInfo>("update-available", (event) => {
+      setUpdateInfo(event.payload);
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
+  const handleCheckForUpdates = async () => {
+    setChecking(true);
+    try {
+      const result = await checkForUpdates();
+      setUpdateInfo(result);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const openReleaseUrl = (url: string) => {
+    invoke("open_url", { url });
+  };
+
   return (
     <SettingsGroup>
       <div className="px-4 py-6 text-center">
@@ -1082,6 +1114,28 @@ function AboutTab() {
         <p className="text-white/55 text-[13px]">
           Built with Tauri + whisper.cpp + React.
         </p>
+
+        {updateInfo && (
+          <div className="mt-4 px-3 py-2 rounded-lg bg-[#34C759]/15 border border-[#34C759]/30">
+            <p className="text-[#34C759] text-[13px] font-medium">
+              New release available: {updateInfo.tag_name}
+            </p>
+            <button
+              onClick={() => openReleaseUrl(updateInfo.html_url)}
+              className="text-[#007AFF] text-[12px] mt-1 hover:underline cursor-pointer"
+            >
+              Download from GitHub
+            </button>
+          </div>
+        )}
+
+        <button
+          onClick={handleCheckForUpdates}
+          disabled={checking}
+          className="apple-button-secondary mt-4"
+        >
+          {checking ? "Checking..." : "Check for Updates"}
+        </button>
       </div>
     </SettingsGroup>
   );

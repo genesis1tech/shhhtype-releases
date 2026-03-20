@@ -12,6 +12,7 @@ import type {
   LicenseStatus,
   GroqUsage,
   AudioDevice,
+  UpdateInfo,
 } from "./types";
 
 /** Start audio recording */
@@ -110,3 +111,11 @@ export const listAudioDevices = () =>
 
 /** Restart the app (to apply hotkey changes) */
 export const restartApp = () => invoke<void>("restart_app");
+
+/** Check GitHub for available updates */
+export const checkForUpdates = () =>
+  invoke<UpdateInfo | null>("check_for_updates");
+
+/** Get cached update info (if a newer version was found) */
+export const getUpdateInfo = () =>
+  invoke<UpdateInfo | null>("get_update_info");
