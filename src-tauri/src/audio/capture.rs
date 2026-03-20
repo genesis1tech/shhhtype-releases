@@ -16,13 +16,23 @@ impl AudioCapture {
         }
     }
 
-    /// Start capturing audio from the default input device.
+    /// Start capturing audio from the specified or default input device.
     /// Audio samples (f32) are pushed into the shared buffer.
-    pub fn start(&mut self, buffer: Arc<Mutex<Vec<f32>>>) -> Result<()> {
+    pub fn start(&mut self, buffer: Arc<Mutex<Vec<f32>>>, device_name: Option<&str>) -> Result<()> {
         let host = cpal::default_host();
-        let device = host
-            .default_input_device()
-            .ok_or_else(|| anyhow::anyhow!("No input device available"))?;
+        let device = if let Some(name) = device_name {
+            host.input_devices()?
+                .find(|d| d.name().ok().as_deref() == Some(name))
+                .ok_or_else(|| anyhow::anyhow!("Input device '{}' not found, falling back to default", name))
+                .or_else(|e| {
+                    log::warn!("{}", e);
+                    host.default_input_device()
+                        .ok_or_else(|| anyhow::anyhow!("No input device available"))
+                })?
+        } else {
+            host.default_input_device()
+                .ok_or_else(|| anyhow::anyhow!("No input device available"))?
+        };
 
         let config = device.default_input_config()?;
         self.sample_rate = config.sample_rate().0;

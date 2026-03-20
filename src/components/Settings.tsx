@@ -13,8 +13,11 @@ import {
   getLicenseStatus,
   deactivateLicense,
   getGroqUsage,
+  listAudioDevices,
+  restartApp,
 } from "../lib/commands";
 import type {
+  AudioDevice,
   DictionaryEntry,
   ModelStatus,
   ModelSize,
@@ -29,7 +32,91 @@ import History from "./History";
 
 type Tab = "general" | "audio" | "dictionary" | "history" | "license" | "about";
 
-/** Main settings window with tabbed navigation. */
+const SIDEBAR_TABS: { id: Tab; label: string; color: string }[] = [
+  { id: "general", label: "General", color: "#8E8E93" },
+  { id: "audio", label: "Audio", color: "#AF52DE" },
+  { id: "dictionary", label: "Dictionary", color: "#FF9500" },
+  { id: "history", label: "History", color: "#34C759" },
+  { id: "license", label: "License", color: "#FFCC00" },
+  { id: "about", label: "About", color: "#007AFF" },
+];
+
+function SidebarIcon({ tab }: { tab: Tab }) {
+  const svgs: Record<Tab, React.ReactNode> = {
+    general: (
+      <svg viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round">
+        <circle cx="8" cy="8" r="2" />
+        <path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4" />
+      </svg>
+    ),
+    audio: (
+      <svg viewBox="0 0 16 16" fill="white">
+        <rect x="2" y="5.5" width="2" height="5" rx="1" />
+        <rect x="5.5" y="3" width="2" height="10" rx="1" />
+        <rect x="9" y="4.5" width="2" height="7" rx="1" />
+        <rect x="12.5" y="6" width="2" height="4" rx="1" />
+      </svg>
+    ),
+    dictionary: (
+      <svg viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round">
+        <rect x="3" y="1.5" width="10" height="13" rx="1.5" />
+        <path d="M6 5h4M6 8h2.5" />
+      </svg>
+    ),
+    history: (
+      <svg viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="8" cy="8" r="6" />
+        <path d="M8 4.5V8l2.5 1.5" />
+      </svg>
+    ),
+    license: (
+      <svg viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round">
+        <rect x="2" y="5" width="12" height="8" rx="1.5" />
+        <path d="M5 5V3.5a3 3 0 016 0V5" />
+      </svg>
+    ),
+    about: (
+      <svg viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round">
+        <circle cx="8" cy="8" r="6" />
+        <path d="M8 7v4M8 5v.01" />
+      </svg>
+    ),
+  };
+  return <>{svgs[tab]}</>;
+}
+
+function SettingsGroup({ title, children }: { title?: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-5">
+      {title && <h3 className="settings-section-header">{title}</h3>}
+      <div className="settings-group">{children}</div>
+    </div>
+  );
+}
+
+function SettingsRow({
+  label,
+  description,
+  children,
+}: {
+  label: string;
+  description?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="settings-row">
+      <div className="flex-1 min-w-0">
+        <div className="text-[13px] text-white/85">{label}</div>
+        {description && (
+          <div className="text-[11px] text-white/55 mt-0.5">{description}</div>
+        )}
+      </div>
+      <div className="flex items-center gap-2 shrink-0">{children}</div>
+    </div>
+  );
+}
+
+/** Main settings window with Apple System Settings-style sidebar navigation. */
 export default function Settings() {
   const { settings, loading, error, save } = useSettings();
   const [activeTab, setActiveTab] = useState<Tab>("general");
@@ -37,7 +124,7 @@ export default function Settings() {
   if (loading) {
     return (
       <div className="settings-window flex items-center justify-center h-screen">
-        <p className="text-gray-400">Loading settings...</p>
+        <p className="text-white/55">Loading settings...</p>
       </div>
     );
   }
@@ -50,147 +137,37 @@ export default function Settings() {
     );
   }
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: "general", label: "General" },
-    { id: "audio", label: "Audio" },
-    { id: "dictionary", label: "Dictionary" },
-    { id: "history", label: "History" },
-    { id: "license", label: "License" },
-    { id: "about", label: "About" },
-  ];
-
   return (
-    <div className="settings-window min-h-screen p-6">
-      <h1 className="text-xl font-bold mb-6">ShhhType Settings</h1>
-
-      {/* Permission status banner */}
-      <PermissionBanner />
-
-      {/* Tab bar */}
-      <div className="flex gap-1 mb-6 border-b border-gray-700">
-        {tabs.map((tab) => (
+    <div className="settings-layout">
+      <div className="settings-sidebar">
+        {SIDEBAR_TABS.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2 text-sm font-medium rounded-t transition-colors ${
-              activeTab === tab.id
-                ? "bg-gray-700 text-white"
-                : "text-gray-400 hover:text-white"
-            }`}
+            className={`sidebar-item ${activeTab === tab.id ? "active" : ""}`}
           >
+            <span
+              className="sidebar-icon-badge"
+              style={{ background: tab.color }}
+            >
+              <SidebarIcon tab={tab.id} />
+            </span>
             {tab.label}
           </button>
         ))}
       </div>
-
-      {/* Tab content */}
-      <div className="max-w-lg">
+      <div className="settings-content">
+        <PermissionBanner />
         {activeTab === "general" && (
           <GeneralTab settings={settings} save={save} />
         )}
-
         {activeTab === "audio" && (
-          <div className="space-y-5">
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">
-                VAD Silence Threshold: {settings.vad_threshold.toFixed(3)}
-              </label>
-              <input
-                type="range"
-                min="0.001"
-                max="0.1"
-                step="0.001"
-                value={settings.vad_threshold}
-                onChange={(e) =>
-                  save({
-                    ...settings,
-                    vad_threshold: parseFloat(e.target.value),
-                  })
-                }
-                className="w-full accent-blue-500"
-              />
-              <p className="text-gray-500 text-xs mt-1">
-                Lower = more sensitive, higher = ignores quiet sounds
-              </p>
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">
-                Silence Timeout: {settings.vad_silence_timeout.toFixed(0)}s
-              </label>
-              <input
-                type="range"
-                min="1"
-                max="30"
-                step="1"
-                value={settings.vad_silence_timeout}
-                onChange={(e) =>
-                  save({
-                    ...settings,
-                    vad_silence_timeout: parseFloat(e.target.value),
-                  })
-                }
-                className="w-full accent-blue-500"
-              />
-              <p className="text-gray-500 text-xs mt-1">
-                How long to keep listening after you stop speaking before auto-stopping
-              </p>
-            </div>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.show_overlay}
-                onChange={(e) =>
-                  save({ ...settings, show_overlay: e.target.checked })
-                }
-                className="w-4 h-4 accent-blue-500"
-              />
-              <span className="text-sm text-gray-300">
-                Show floating overlay during recording
-              </span>
-            </label>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.sound_feedback}
-                onChange={(e) =>
-                  save({ ...settings, sound_feedback: e.target.checked })
-                }
-                className="w-4 h-4 accent-blue-500"
-              />
-              <span className="text-sm text-gray-300">
-                Play sound on start/stop
-              </span>
-            </label>
-          </div>
+          <AudioTab settings={settings} save={save} />
         )}
-
         {activeTab === "dictionary" && <DictionaryEditor />}
-
         {activeTab === "history" && <History />}
-
         {activeTab === "license" && <LicenseTab />}
-
-        {activeTab === "about" && (
-          <div className="space-y-3">
-            <p className="text-white font-medium">ShhhType v0.1.0</p>
-            <p className="text-gray-400 text-sm">
-              Voice-to-text developer tool for macOS.
-            </p>
-            <p className="text-gray-400 text-sm">
-              Built with Tauri + whisper.cpp + React.
-            </p>
-            <div className="pt-2 space-y-1">
-              <a
-                href="https://github.com/genesis1tech/shhhtype"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block text-blue-400 hover:underline text-sm"
-              >
-                GitHub Repository
-              </a>
-            </div>
-          </div>
-        )}
+        {activeTab === "about" && <AboutTab />}
       </div>
     </div>
   );
@@ -207,7 +184,6 @@ function PermissionBanner() {
 
   useEffect(() => {
     refreshStatus();
-    // Poll permissions every 2s to detect when user grants them in System Settings
     const interval = setInterval(refreshStatus, 2000);
     return () => clearInterval(interval);
   }, []);
@@ -216,7 +192,6 @@ function PermissionBanner() {
     setRequesting(true);
     try {
       await requestMicrophonePermission();
-      // Wait a moment for macOS to process, then refresh
       setTimeout(refreshStatus, 1000);
     } catch (e) {
       console.error("Failed to request microphone permission:", e);
@@ -229,20 +204,20 @@ function PermissionBanner() {
   if (status.microphone && status.accessibility) return null;
 
   return (
-    <div className="bg-yellow-900/50 border border-yellow-700 rounded p-4 mb-6 space-y-2">
-      <h3 className="text-yellow-300 font-medium text-sm">
+    <div className="bg-white/5 border border-white/10 rounded-[10px] p-4 mb-5">
+      <h3 className="text-[#FFCC00] font-medium text-[13px] mb-2">
         Permissions Required
       </h3>
-      <div className="space-y-1 text-sm">
+      <div className="space-y-1.5 text-[13px]">
         <div className="flex items-center gap-2">
           <span
             className={`inline-block h-2 w-2 rounded-full ${
-              status.microphone ? "bg-green-400" : "bg-red-400"
+              status.microphone ? "bg-[#34C759]" : "bg-[#FF3B30]"
             }`}
           />
           <span
             className={
-              status.microphone ? "text-green-300" : "text-red-300"
+              status.microphone ? "text-[#34C759]" : "text-[#FF3B30]"
             }
           >
             Microphone: {status.microphone ? "Granted" : "Not Granted"}
@@ -251,7 +226,7 @@ function PermissionBanner() {
             <button
               onClick={handleRequestMic}
               disabled={requesting}
-              className="ml-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-2 py-0.5 rounded text-xs"
+              className="bg-[#007AFF] text-white text-[11px] px-2 py-0.5 rounded hover:opacity-85 disabled:opacity-50 ml-2"
             >
               {requesting ? "Requesting..." : "Grant Access"}
             </button>
@@ -260,12 +235,12 @@ function PermissionBanner() {
         <div className="flex items-center gap-2">
           <span
             className={`inline-block h-2 w-2 rounded-full ${
-              status.accessibility ? "bg-green-400" : "bg-red-400"
+              status.accessibility ? "bg-[#34C759]" : "bg-[#FF3B30]"
             }`}
           />
           <span
             className={
-              status.accessibility ? "text-green-300" : "text-red-300"
+              status.accessibility ? "text-[#34C759]" : "text-[#FF3B30]"
             }
           >
             Accessibility:{" "}
@@ -273,14 +248,15 @@ function PermissionBanner() {
           </span>
         </div>
       </div>
-      <p className="text-gray-400 text-xs">
-        Click "Grant Access" to trigger the permission prompt, or open System Settings &gt; Privacy &amp; Security manually.
+      <p className="text-white/30 text-[11px] mt-2">
+        Click &quot;Grant Access&quot; to trigger the permission prompt, or open
+        System Settings &gt; Privacy &amp; Security manually.
       </p>
     </div>
   );
 }
 
-/** General tab with model management, hotkey, injection, and launch settings. */
+/** General tab — organized into Apple-style setting groups. */
 function GeneralTab({
   settings,
   save,
@@ -293,6 +269,7 @@ function GeneralTab({
   const [progress, setProgress] = useState(0);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [capturingHotkey, setCapturingHotkey] = useState(false);
+  const [restartNeeded, setRestartNeeded] = useState(false);
   const hotkeyRef = useRef<HTMLInputElement>(null);
 
   const loadModels = () => {
@@ -310,6 +287,15 @@ function GeneralTab({
         setProgress(Math.round(event.payload.percent));
       }
     );
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
+  useEffect(() => {
+    const unlisten = listen("hotkey-restart-required", () => {
+      setRestartNeeded(true);
+    });
     return () => {
       unlisten.then((fn) => fn());
     };
@@ -341,7 +327,6 @@ function GeneralTab({
     }
   };
 
-  // Hotkey capture: convert keyboard event to Tauri shortcut string
   const handleHotkeyCapture = useCallback(
     (e: React.KeyboardEvent) => {
       e.preventDefault();
@@ -352,17 +337,17 @@ function GeneralTab({
       if (e.shiftKey) parts.push("Shift");
       if (e.altKey) parts.push("Alt");
 
-      const key = e.key;
-      // Only accept if a modifier + a non-modifier key is pressed
+      // Use e.code (physical key) to avoid macOS Alt-composed characters
+      // like ∫ (Alt+B), ß (Alt+S), etc. e.code gives "KeyB", "KeyS", etc.
+      const code = e.code;
       if (
-        key !== "Meta" &&
-        key !== "Control" &&
-        key !== "Shift" &&
-        key !== "Alt"
+        code !== "MetaLeft" && code !== "MetaRight" &&
+        code !== "ControlLeft" && code !== "ControlRight" &&
+        code !== "ShiftLeft" && code !== "ShiftRight" &&
+        code !== "AltLeft" && code !== "AltRight"
       ) {
-        // Map common keys to Tauri shortcut names
-        const keyMap: Record<string, string> = {
-          " ": "Space",
+        const codeMap: Record<string, string> = {
+          Space: "Space",
           ArrowUp: "Up",
           ArrowDown: "Down",
           ArrowLeft: "Left",
@@ -373,8 +358,26 @@ function GeneralTab({
           Escape: "Escape",
           Tab: "Tab",
         };
-        const mappedKey =
-          keyMap[key] || (key.length === 1 ? key.toUpperCase() : key);
+        // e.code for letters is "KeyA"-"KeyZ", digits "Digit0"-"Digit9",
+        // function keys "F1"-"F12", punctuation like "Period", "Comma", etc.
+        let mappedKey = codeMap[code];
+        if (!mappedKey) {
+          if (code.startsWith("Key")) {
+            mappedKey = code.slice(3); // "KeyB" -> "B"
+          } else if (code.startsWith("Digit")) {
+            mappedKey = code.slice(5); // "Digit1" -> "1"
+          } else if (code.startsWith("Numpad")) {
+            mappedKey = "num" + code.slice(6);
+          } else {
+            // Handle punctuation: "Period" -> ".", "Comma" -> ",", etc.
+            const punctMap: Record<string, string> = {
+              Period: ".", Comma: ",", Slash: "/", Backslash: "\\",
+              BracketLeft: "[", BracketRight: "]", Semicolon: ";",
+              Quote: "'", Backquote: "`", Minus: "-", Equal: "=",
+            };
+            mappedKey = punctMap[code] || code;
+          }
+        }
         parts.push(mappedKey);
 
         if (parts.length >= 2) {
@@ -397,322 +400,440 @@ function GeneralTab({
   ];
 
   return (
-    <div className="space-y-4">
-      {/* Model selector — only for local backend */}
-      {settings.transcription_backend === "Local" && <div>
-        <label className="block text-sm text-gray-400 mb-1">
-          Whisper Model
-        </label>
-        <select
-          value={settings.model_size}
-          onChange={(e) =>
-            save({ ...settings, model_size: e.target.value as ModelSize })
-          }
-          className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white"
-        >
-          {modelOptions.map((opt) => {
-            const status = models.find((m) => m.model === opt.value);
-            const dot = status?.downloaded ? "\u2713 " : "\u25CB ";
-            return (
-              <option key={opt.value} value={opt.value}>
-                {dot}
-                {opt.label}
-              </option>
-            );
-          })}
-        </select>
-
-        {/* Download / status */}
-        {models.length > 0 && !isCurrentDownloaded && !downloading && (
-          <div className="mt-2">
-            <button
-              onClick={handleDownload}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm"
-            >
-              Download {settings.model_size} model
-            </button>
-            <p className="text-gray-500 text-xs mt-1">
-              Model will be downloaded from Hugging Face.
-            </p>
-          </div>
-        )}
-
-        {downloading && (
-          <div className="mt-2 space-y-1">
-            <div className="flex items-center gap-2">
-              <div className="flex-1 bg-gray-700 rounded-full h-2">
-                <div
-                  className="bg-blue-500 h-2 rounded-full transition-all"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-              <span className="text-xs text-gray-400 w-10 text-right">
-                {progress}%
-              </span>
-            </div>
-            <p className="text-gray-500 text-xs">
-              Downloading {downloading} model...
-            </p>
-          </div>
-        )}
-
-        {downloadError && (
-          <p className="text-red-400 text-xs mt-2">
-            Download failed: {downloadError}
-          </p>
-        )}
-
-        {models.length > 0 && isCurrentDownloaded && !downloading && (
-          <div className="flex items-center gap-2 mt-1">
-            <p className="text-green-400 text-xs">Model ready</p>
-            <button
-              onClick={() => handleDeleteModel(settings.model_size)}
-              className="text-gray-500 hover:text-red-400 text-xs"
-            >
-              Delete
-            </button>
-          </div>
-        )}
-      </div>}
-
-      {/* Language */}
-      <div>
-        <label className="block text-sm text-gray-400 mb-1">Language</label>
-        <select
-          value={settings.language}
-          onChange={(e) => save({ ...settings, language: e.target.value })}
-          className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white"
-        >
-          <option value="en">English</option>
-          <option value="es">Spanish</option>
-          <option value="fr">French</option>
-          <option value="de">German</option>
-          <option value="it">Italian</option>
-          <option value="pt">Portuguese</option>
-          <option value="ja">Japanese</option>
-          <option value="ko">Korean</option>
-          <option value="zh">Chinese</option>
-          <option value="auto">Auto-detect</option>
-        </select>
-      </div>
-
-      {/* Hotkey */}
-      <div>
-        <label className="block text-sm text-gray-400 mb-1">Hotkey</label>
-        <div className="flex gap-2">
-          <input
-            ref={hotkeyRef}
-            type="text"
-            value={
-              capturingHotkey
-                ? "Press shortcut..."
-                : settings.shortcut
-            }
-            readOnly={!capturingHotkey}
-            onKeyDown={capturingHotkey ? handleHotkeyCapture : undefined}
-            onBlur={() => setCapturingHotkey(false)}
-            className={`flex-1 bg-gray-800 border rounded px-3 py-2 text-white ${
-              capturingHotkey
-                ? "border-blue-500 ring-1 ring-blue-500"
-                : "border-gray-600"
-            }`}
-          />
+    <>
+      {restartNeeded && (
+        <div className="bg-[#FFCC00]/10 border border-[#FFCC00]/30 rounded-[10px] p-3 mb-5 flex items-center justify-between">
+          <span className="text-[#FFCC00] text-[13px]">
+            Restart to apply the new hotkey.
+          </span>
           <button
-            onClick={() => {
-              setCapturingHotkey(true);
-              setTimeout(() => hotkeyRef.current?.focus(), 50);
-            }}
-            className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded text-sm"
+            onClick={() => restartApp()}
+            className="apple-button text-[12px]"
           >
-            {capturingHotkey ? "Cancel" : "Change"}
+            Restart Now
           </button>
         </div>
-        <p className="text-gray-500 text-xs mt-1">
-          {capturingHotkey
-            ? "Press a modifier + key combination (e.g., Cmd+Shift+Space)"
-            : "Click Change to set a new hotkey. Requires app restart to take effect."}
-        </p>
-      </div>
-
-      {/* Mode */}
-      <div>
-        <label className="block text-sm text-gray-400 mb-1">Mode</label>
-        <select
-          value={settings.hotkey_mode}
-          onChange={(e) =>
-            save({ ...settings, hotkey_mode: e.target.value as any })
-          }
-          className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white"
-        >
-          <option value="PushToTalk">Push to Talk</option>
-          <option value="Toggle">Toggle</option>
-        </select>
-      </div>
-
-      {/* Injection Method */}
-      <div>
-        <label className="block text-sm text-gray-400 mb-1">
-          Injection Method
-        </label>
-        <select
-          value={settings.injection_method}
-          onChange={(e) =>
-            save({
-              ...settings,
-              injection_method: e.target.value as any,
-            })
-          }
-          className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white"
-        >
-          <option value="Clipboard">Clipboard (Cmd+V)</option>
-          <option value="Keyboard">Keyboard Simulation</option>
-        </select>
-      </div>
-
-      {/* Auto-copy toggle */}
-      <label className="flex items-center gap-3 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={settings.auto_copy}
-          onChange={(e) =>
-            save({ ...settings, auto_copy: e.target.checked })
-          }
-          className="w-4 h-4 accent-blue-500"
-        />
-        <div>
-          <span className="text-sm text-gray-300">
-            Auto-copy transcription to clipboard
-          </span>
-          <p className="text-gray-500 text-xs">
-            When using keyboard injection, also copy text to clipboard
-          </p>
-        </div>
-      </label>
-
-      {/* Auto-launch toggle */}
-      <label className="flex items-center gap-3 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={settings.auto_launch}
-          onChange={(e) =>
-            save({ ...settings, auto_launch: e.target.checked })
-          }
-          className="w-4 h-4 accent-blue-500"
-        />
-        <span className="text-sm text-gray-300">Launch at login</span>
-      </label>
-
-      {/* Divider */}
-      <hr className="border-gray-700" />
-
-      {/* Transcription Backend */}
-      <div>
-        <label className="block text-sm text-gray-400 mb-1">
-          Transcription Backend
-        </label>
-        <select
-          value={settings.transcription_backend}
-          onChange={(e) =>
-            save({
-              ...settings,
-              transcription_backend: e.target.value as TranscriptionBackend,
-            })
-          }
-          className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white"
-        >
-          <option value="Cloud">Cloud (Groq)</option>
-          <option value="Local">Local (whisper.cpp)</option>
-        </select>
-        <p className="text-gray-500 text-xs mt-1">
-          {settings.transcription_backend === "Cloud"
-            ? "Fast cloud transcription via Groq API. Requires API key."
-            : "Private, on-device transcription. No data leaves your Mac."}
-        </p>
-      </div>
-
-      {/* Groq API Key — shown when Cloud backend or rewrite is enabled */}
-      {(settings.transcription_backend === "Cloud" || settings.rewrite_enabled) && (
-        <div>
-          <label className="block text-sm text-gray-400 mb-1">
-            Groq API Key
-          </label>
-          <input
-            type="password"
-            value={settings.groq_api_key ?? ""}
-            onChange={(e) =>
-              save({
-                ...settings,
-                groq_api_key: e.target.value || null,
-              })
-            }
-            placeholder="gsk_..."
-            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-600"
-          />
-          <p className="text-gray-500 text-xs mt-1">
-            Get a free API key at{" "}
-            <a
-              href="https://console.groq.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-400 hover:underline"
-            >
-              console.groq.com
-            </a>
-          </p>
-        </div>
       )}
 
-      {/* Groq Usage — shown when Cloud backend or rewrite is enabled */}
-      {(settings.transcription_backend === "Cloud" || settings.rewrite_enabled) && (
-        <GroqUsageCard />
-      )}
-
-      {/* Divider */}
-      <hr className="border-gray-700" />
-
-      {/* AI Rewrite */}
-      <label className="flex items-center gap-3 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={settings.rewrite_enabled}
-          onChange={(e) =>
-            save({ ...settings, rewrite_enabled: e.target.checked })
+      {/* TRANSCRIPTION */}
+      <SettingsGroup title="Transcription">
+        <SettingsRow
+          label="Backend"
+          description={
+            settings.transcription_backend === "Cloud"
+              ? "Fast cloud transcription via Groq API"
+              : "Private, on-device transcription"
           }
-          className="w-4 h-4 accent-blue-500"
-        />
-        <div>
-          <span className="text-sm text-gray-300">
-            AI Rewrite
-          </span>
-          <p className="text-gray-500 text-xs">
-            After transcription, press {settings.rewrite_hotkey} to polish text with AI
-          </p>
-        </div>
-      </label>
-
-      {settings.rewrite_enabled && (
-        <div>
-          <label className="block text-sm text-gray-400 mb-1">
-            Rewrite Style
-          </label>
+        >
           <select
-            value={settings.rewrite_style}
+            className="apple-select"
+            value={settings.transcription_backend}
             onChange={(e) =>
               save({
                 ...settings,
-                rewrite_style: e.target.value as RewriteStyle,
+                transcription_backend: e.target.value as TranscriptionBackend,
               })
             }
-            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white"
           >
-            <option value="Professional">Professional</option>
-            <option value="Casual">Casual</option>
-            <option value="Concise">Concise</option>
-            <option value="Friendly">Friendly</option>
+            <option value="Cloud">Cloud (Groq)</option>
+            <option value="Local">Local (whisper.cpp)</option>
           </select>
-        </div>
-      )}
-    </div>
+        </SettingsRow>
+
+        {settings.transcription_backend === "Local" && (
+          <>
+            <SettingsRow label="Whisper Model">
+              <select
+                className="apple-select"
+                value={settings.model_size}
+                onChange={(e) =>
+                  save({
+                    ...settings,
+                    model_size: e.target.value as ModelSize,
+                  })
+                }
+              >
+                {modelOptions.map((opt) => {
+                  const status = models.find((m) => m.model === opt.value);
+                  const dot = status?.downloaded ? "\u2713 " : "\u25CB ";
+                  return (
+                    <option key={opt.value} value={opt.value}>
+                      {dot}
+                      {opt.label}
+                    </option>
+                  );
+                })}
+              </select>
+            </SettingsRow>
+
+            {/* Model download status */}
+            {models.length > 0 && (
+              <div className="px-4 py-3 border-t border-white/10">
+                {!isCurrentDownloaded && !downloading && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleDownload}
+                      className="apple-button text-[12px]"
+                    >
+                      Download {settings.model_size}
+                    </button>
+                    <span className="text-white/30 text-[11px]">
+                      From Hugging Face
+                    </span>
+                  </div>
+                )}
+                {downloading && (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 bg-white/10 rounded-full h-1.5">
+                        <div
+                          className="bg-[#007AFF] h-1.5 rounded-full transition-all"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                      <span className="text-[11px] text-white/55 w-10 text-right">
+                        {progress}%
+                      </span>
+                    </div>
+                    <p className="text-white/30 text-[11px]">
+                      Downloading {downloading} model...
+                    </p>
+                  </div>
+                )}
+                {downloadError && (
+                  <p className="text-[#FF3B30] text-[11px]">
+                    Download failed: {downloadError}
+                  </p>
+                )}
+                {isCurrentDownloaded && !downloading && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[#34C759] text-[11px]">
+                      Model ready
+                    </span>
+                    <button
+                      onClick={() => handleDeleteModel(settings.model_size)}
+                      className="text-white/30 hover:text-[#FF3B30] text-[11px]"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        <SettingsRow label="Language">
+          <select
+            className="apple-select"
+            value={settings.language}
+            onChange={(e) => save({ ...settings, language: e.target.value })}
+          >
+            <option value="en">English</option>
+            <option value="es">Spanish</option>
+            <option value="fr">French</option>
+            <option value="de">German</option>
+            <option value="it">Italian</option>
+            <option value="pt">Portuguese</option>
+            <option value="ja">Japanese</option>
+            <option value="ko">Korean</option>
+            <option value="zh">Chinese</option>
+            <option value="auto">Auto-detect</option>
+          </select>
+        </SettingsRow>
+
+        {(settings.transcription_backend === "Cloud" ||
+          settings.rewrite_enabled) && (
+          <SettingsRow
+            label="Groq API Key"
+            description={
+              <>
+                Get a free key at{" "}
+                <a
+                  href="https://console.groq.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#007AFF] hover:underline"
+                >
+                  console.groq.com
+                </a>
+              </>
+            }
+          >
+            <input
+              type="password"
+              value={settings.groq_api_key ?? ""}
+              onChange={(e) =>
+                save({
+                  ...settings,
+                  groq_api_key: e.target.value || null,
+                })
+              }
+              placeholder="gsk_..."
+              className="apple-input w-48"
+            />
+          </SettingsRow>
+        )}
+      </SettingsGroup>
+
+      {/* Groq Usage */}
+      {(settings.transcription_backend === "Cloud" ||
+        settings.rewrite_enabled) && <GroqUsageCard />}
+
+      {/* INPUT */}
+      <SettingsGroup title="Input">
+        <SettingsRow
+          label="Hotkey"
+          description={
+            capturingHotkey
+              ? "Press a modifier + key combination"
+              : "Restart required after changing"
+          }
+        >
+          <div className="flex items-center gap-1.5">
+            <input
+              ref={hotkeyRef}
+              type="text"
+              value={
+                capturingHotkey ? "Press shortcut..." : settings.shortcut
+              }
+              readOnly={!capturingHotkey}
+              onKeyDown={capturingHotkey ? handleHotkeyCapture : undefined}
+              onBlur={() => setCapturingHotkey(false)}
+              className={`apple-input w-40 text-center ${
+                capturingHotkey ? "!border-[#007AFF]" : ""
+              }`}
+            />
+            <button
+              onClick={() => {
+                setCapturingHotkey(true);
+                setTimeout(() => hotkeyRef.current?.focus(), 50);
+              }}
+              className="apple-button-secondary text-[12px]"
+            >
+              {capturingHotkey ? "Cancel" : "Change"}
+            </button>
+          </div>
+        </SettingsRow>
+
+        <SettingsRow label="Mode">
+          <select
+            className="apple-select"
+            value={settings.hotkey_mode}
+            onChange={(e) =>
+              save({ ...settings, hotkey_mode: e.target.value as any })
+            }
+          >
+            <option value="PushToTalk">Push to Talk</option>
+            <option value="Toggle">Toggle</option>
+          </select>
+        </SettingsRow>
+      </SettingsGroup>
+
+      {/* OUTPUT */}
+      <SettingsGroup title="Output">
+        <SettingsRow label="Injection Method">
+          <select
+            className="apple-select"
+            value={settings.injection_method}
+            onChange={(e) =>
+              save({
+                ...settings,
+                injection_method: e.target.value as any,
+              })
+            }
+          >
+            <option value="Clipboard">Clipboard (Cmd+V)</option>
+            <option value="Keyboard">Keyboard Simulation</option>
+          </select>
+        </SettingsRow>
+
+        <SettingsRow
+          label="Auto-copy"
+          description="Copy to clipboard when using keyboard injection"
+        >
+          <input
+            type="checkbox"
+            className="apple-toggle"
+            checked={settings.auto_copy}
+            onChange={(e) =>
+              save({ ...settings, auto_copy: e.target.checked })
+            }
+          />
+        </SettingsRow>
+      </SettingsGroup>
+
+      {/* AI REWRITE */}
+      <SettingsGroup title="AI Rewrite">
+        <SettingsRow
+          label="Enable"
+          description={`Press ${settings.rewrite_hotkey} to polish text with AI`}
+        >
+          <input
+            type="checkbox"
+            className="apple-toggle"
+            checked={settings.rewrite_enabled}
+            onChange={(e) =>
+              save({ ...settings, rewrite_enabled: e.target.checked })
+            }
+          />
+        </SettingsRow>
+
+        {settings.rewrite_enabled && (
+          <SettingsRow label="Style">
+            <select
+              className="apple-select"
+              value={settings.rewrite_style}
+              onChange={(e) =>
+                save({
+                  ...settings,
+                  rewrite_style: e.target.value as RewriteStyle,
+                })
+              }
+            >
+              <option value="Professional">Professional</option>
+              <option value="Casual">Casual</option>
+              <option value="Concise">Concise</option>
+              <option value="Friendly">Friendly</option>
+            </select>
+          </SettingsRow>
+        )}
+      </SettingsGroup>
+
+      {/* SYSTEM */}
+      <SettingsGroup title="System">
+        <SettingsRow label="Launch at login">
+          <input
+            type="checkbox"
+            className="apple-toggle"
+            checked={settings.auto_launch}
+            onChange={(e) =>
+              save({ ...settings, auto_launch: e.target.checked })
+            }
+          />
+        </SettingsRow>
+      </SettingsGroup>
+    </>
+  );
+}
+
+/** Audio tab — voice detection and feedback settings. */
+function AudioTab({
+  settings,
+  save,
+}: {
+  settings: NonNullable<ReturnType<typeof useSettings>["settings"]>;
+  save: ReturnType<typeof useSettings>["save"];
+}) {
+  const [devices, setDevices] = useState<AudioDevice[]>([]);
+
+  useEffect(() => {
+    listAudioDevices().then(setDevices).catch(console.error);
+  }, []);
+
+  const defaultDevice = devices.find((d) => d.is_default);
+
+  return (
+    <>
+      <SettingsGroup title="Input Device">
+        <SettingsRow
+          label="Microphone"
+          description={
+            settings.audio_input_device
+              ? "Using selected device"
+              : `Using system default${defaultDevice ? ` (${defaultDevice.name})` : ""}`
+          }
+        >
+          <select
+            className="apple-select"
+            value={settings.audio_input_device ?? ""}
+            onChange={(e) =>
+              save({
+                ...settings,
+                audio_input_device: e.target.value || null,
+              })
+            }
+          >
+            <option value="">System Default</option>
+            {devices.map((d) => (
+              <option key={d.name} value={d.name}>
+                {d.name}{d.is_default ? " (default)" : ""}
+              </option>
+            ))}
+          </select>
+        </SettingsRow>
+      </SettingsGroup>
+
+      <SettingsGroup title="Voice Detection">
+        <SettingsRow
+          label={`Silence Threshold: ${settings.vad_threshold.toFixed(3)}`}
+          description="Lower = more sensitive, higher = ignores quiet sounds"
+        >
+          <input
+            type="range"
+            min="0.001"
+            max="0.1"
+            step="0.001"
+            value={settings.vad_threshold}
+            onChange={(e) =>
+              save({
+                ...settings,
+                vad_threshold: parseFloat(e.target.value),
+              })
+            }
+            className="w-32 accent-[#007AFF]"
+          />
+        </SettingsRow>
+        <SettingsRow
+          label={`Silence Timeout: ${settings.vad_silence_timeout.toFixed(0)}s`}
+          description="How long to keep listening after you stop speaking"
+        >
+          <input
+            type="range"
+            min="1"
+            max="30"
+            step="1"
+            value={settings.vad_silence_timeout}
+            onChange={(e) =>
+              save({
+                ...settings,
+                vad_silence_timeout: parseFloat(e.target.value),
+              })
+            }
+            className="w-32 accent-[#007AFF]"
+          />
+        </SettingsRow>
+      </SettingsGroup>
+
+      <SettingsGroup title="Feedback">
+        <SettingsRow
+          label="Show overlay"
+          description="Display floating overlay during recording"
+        >
+          <input
+            type="checkbox"
+            className="apple-toggle"
+            checked={settings.show_overlay}
+            onChange={(e) =>
+              save({ ...settings, show_overlay: e.target.checked })
+            }
+          />
+        </SettingsRow>
+        <SettingsRow
+          label="Sound feedback"
+          description="Play sound on start/stop"
+        >
+          <input
+            type="checkbox"
+            className="apple-toggle"
+            checked={settings.sound_feedback}
+            onChange={(e) =>
+              save({ ...settings, sound_feedback: e.target.checked })
+            }
+          />
+        </SettingsRow>
+      </SettingsGroup>
+    </>
   );
 }
 
@@ -726,21 +847,24 @@ function GroqUsageCard() {
 
   useEffect(() => {
     refresh();
-    // Refresh when transcription/rewrite completes
     const unsubs = [
       listen("transcription-complete", refresh),
       listen("rewrite-complete", refresh),
     ];
-    return () => { unsubs.forEach((p) => p.then((fn) => fn())); };
+    return () => {
+      unsubs.forEach((p) => p.then((fn) => fn()));
+    };
   }, [refresh]);
 
   if (!usage || !usage.updated_at) {
     return (
-      <div className="bg-gray-800/50 border border-gray-700 rounded p-3">
-        <p className="text-gray-500 text-xs">
-          Groq usage data will appear after your first API call.
-        </p>
-      </div>
+      <SettingsGroup>
+        <div className="px-4 py-3">
+          <p className="text-white/30 text-[11px]">
+            Groq usage data will appear after your first API call.
+          </p>
+        </div>
+      </SettingsGroup>
     );
   }
 
@@ -754,70 +878,75 @@ function GroqUsageCard() {
       : null;
 
   const barColor = (pct: number) =>
-    pct > 30 ? "bg-green-500" : pct > 10 ? "bg-yellow-500" : "bg-red-500";
+    pct > 30 ? "bg-[#34C759]" : pct > 10 ? "bg-[#FFCC00]" : "bg-[#FF3B30]";
 
   return (
-    <div className="bg-gray-800/50 border border-gray-700 rounded p-3 space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-gray-300">Groq API Daily Usage</span>
-        <button
-          onClick={refresh}
-          className="text-gray-500 hover:text-gray-300 text-xs"
-        >
-          Refresh
-        </button>
+    <SettingsGroup>
+      <div className="px-4 py-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-medium text-white/55">
+            Groq API Daily Usage
+          </span>
+          <button
+            onClick={refresh}
+            className="text-white/30 hover:text-white/55 text-[11px]"
+          >
+            Refresh
+          </button>
+        </div>
+
+        {reqPct != null && (
+          <div>
+            <div className="flex justify-between text-[11px] text-white/55 mb-0.5">
+              <span>Requests</span>
+              <span>
+                {usage.remaining_requests} / {usage.limit_requests}
+                {usage.reset_requests && (
+                  <span className="text-white/30 ml-1">
+                    (resets in {usage.reset_requests})
+                  </span>
+                )}
+              </span>
+            </div>
+            <div className="w-full bg-white/10 rounded-full h-1.5">
+              <div
+                className={`h-1.5 rounded-full transition-all ${barColor(reqPct)}`}
+                style={{ width: `${reqPct}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {tokPct != null && (
+          <div>
+            <div className="flex justify-between text-[11px] text-white/55 mb-0.5">
+              <span>Tokens</span>
+              <span>
+                {usage.remaining_tokens?.toLocaleString()} /{" "}
+                {usage.limit_tokens?.toLocaleString()}
+                {usage.reset_tokens && (
+                  <span className="text-white/30 ml-1">
+                    (resets in {usage.reset_tokens})
+                  </span>
+                )}
+              </span>
+            </div>
+            <div className="w-full bg-white/10 rounded-full h-1.5">
+              <div
+                className={`h-1.5 rounded-full transition-all ${barColor(tokPct)}`}
+                style={{ width: `${tokPct}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {usage.updated_at && (
+          <p className="text-white/20 text-[10px]">
+            Last updated: {new Date(usage.updated_at).toLocaleTimeString()}
+          </p>
+        )}
       </div>
-
-      {reqPct != null && (
-        <div>
-          <div className="flex justify-between text-xs text-gray-400 mb-0.5">
-            <span>Requests</span>
-            <span>
-              {usage.remaining_requests} / {usage.limit_requests}
-              {usage.reset_requests && (
-                <span className="text-gray-500 ml-1">
-                  (resets in {usage.reset_requests})
-                </span>
-              )}
-            </span>
-          </div>
-          <div className="w-full bg-gray-700 rounded-full h-1.5">
-            <div
-              className={`h-1.5 rounded-full transition-all ${barColor(reqPct)}`}
-              style={{ width: `${reqPct}%` }}
-            />
-          </div>
-        </div>
-      )}
-
-      {tokPct != null && (
-        <div>
-          <div className="flex justify-between text-xs text-gray-400 mb-0.5">
-            <span>Tokens</span>
-            <span>
-              {usage.remaining_tokens?.toLocaleString()} / {usage.limit_tokens?.toLocaleString()}
-              {usage.reset_tokens && (
-                <span className="text-gray-500 ml-1">
-                  (resets in {usage.reset_tokens})
-                </span>
-              )}
-            </span>
-          </div>
-          <div className="w-full bg-gray-700 rounded-full h-1.5">
-            <div
-              className={`h-1.5 rounded-full transition-all ${barColor(tokPct)}`}
-              style={{ width: `${tokPct}%` }}
-            />
-          </div>
-        </div>
-      )}
-
-      {usage.updated_at && (
-        <p className="text-gray-600 text-[10px]">
-          Last updated: {new Date(usage.updated_at).toLocaleTimeString()}
-        </p>
-      )}
-    </div>
+    </SettingsGroup>
   );
 }
 
@@ -861,68 +990,100 @@ function LicenseTab() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <span
-          className={`inline-block h-3 w-3 rounded-full ${
-            status === "Licensed"
-              ? "bg-green-400"
-              : status === "Invalid"
-              ? "bg-red-400"
-              : "bg-gray-400"
-          }`}
-        />
-        <span className="text-sm font-medium text-white">
-          {status === "Licensed"
-            ? "Licensed"
-            : status === "Invalid"
-            ? "Invalid License"
-            : "Free Version"}
-        </span>
-      </div>
+    <>
+      <SettingsGroup>
+        <div className="settings-row">
+          <div className="flex items-center gap-3">
+            <span
+              className={`inline-block h-3 w-3 rounded-full ${
+                status === "Licensed"
+                  ? "bg-[#34C759]"
+                  : status === "Invalid"
+                  ? "bg-[#FF3B30]"
+                  : "bg-white/30"
+              }`}
+            />
+            <span className="text-[13px] font-medium text-white/85">
+              {status === "Licensed"
+                ? "Licensed"
+                : status === "Invalid"
+                ? "Invalid License"
+                : "Free Version"}
+            </span>
+          </div>
+        </div>
+      </SettingsGroup>
 
       {status === "Licensed" ? (
-        <div className="space-y-3">
-          <p className="text-gray-400 text-sm">
-            Your license is active on this machine. Cloud transcription and AI
-            rewrite are unlocked.
-          </p>
-          <button
-            onClick={handleDeactivate}
-            disabled={loading}
-            className="bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white px-3 py-1.5 rounded text-sm"
-          >
-            {loading ? "Deactivating..." : "Deactivate License"}
-          </button>
-          <p className="text-gray-500 text-xs">
-            Deactivate to transfer your license to another machine.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          <p className="text-gray-400 text-sm">
-            Enter your license key to unlock cloud transcription and AI rewrite.
-          </p>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-              placeholder="Enter license key..."
-              className="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-600"
-            />
-            <button
-              onClick={handleActivate}
-              disabled={loading || !key.trim()}
-              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded text-sm"
-            >
-              {loading ? "Activating..." : "Activate"}
-            </button>
+        <SettingsGroup>
+          <div className="px-4 py-3 space-y-3">
+            <p className="text-white/55 text-[13px]">
+              Your license is active on this machine. Cloud transcription and AI
+              rewrite are unlocked.
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleDeactivate}
+                disabled={loading}
+                className="apple-button-secondary"
+              >
+                {loading ? "Deactivating..." : "Deactivate License"}
+              </button>
+              <span className="text-white/30 text-[11px]">
+                Transfer to another machine
+              </span>
+            </div>
           </div>
-          {error && <p className="text-red-400 text-xs">{error}</p>}
-        </div>
+        </SettingsGroup>
+      ) : (
+        <SettingsGroup>
+          <div className="px-4 py-3 space-y-3">
+            <p className="text-white/55 text-[13px]">
+              Enter your license key to unlock cloud transcription and AI
+              rewrite.
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={key}
+                onChange={(e) => setKey(e.target.value)}
+                placeholder="Enter license key..."
+                className="apple-input flex-1"
+              />
+              <button
+                onClick={handleActivate}
+                disabled={loading || !key.trim()}
+                className="apple-button"
+              >
+                {loading ? "Activating..." : "Activate"}
+              </button>
+            </div>
+            {error && (
+              <p className="text-[#FF3B30] text-[11px]">{error}</p>
+            )}
+          </div>
+        </SettingsGroup>
       )}
-    </div>
+    </>
+  );
+}
+
+/** About tab. */
+function AboutTab() {
+  return (
+    <SettingsGroup>
+      <div className="px-4 py-6 text-center">
+        <p className="text-white/85 font-medium text-[15px]">
+          ShhhType v0.1.0
+        </p>
+        <p className="text-white/55 text-[13px] mt-1">
+          Voice-to-text developer tool for macOS.
+        </p>
+        <p className="text-white/55 text-[13px]">
+          Built with Tauri + whisper.cpp + React.
+        </p>
+      </div>
+    </SettingsGroup>
   );
 }
 
@@ -957,75 +1118,57 @@ function DictionaryEditor() {
     );
 
   if (loading) {
-    return <p className="text-gray-400 text-sm">Loading dictionary...</p>;
+    return <p className="text-white/55 text-[13px]">Loading dictionary...</p>;
   }
 
   return (
-    <div className="space-y-4">
-      <p className="text-gray-400 text-xs">
-        Add corrections for terms Whisper often gets wrong (e.g., "react
-        native" &rarr; "React Native").
+    <>
+      <p className="text-white/55 text-[11px] mb-4">
+        Add corrections for terms Whisper often gets wrong (e.g., &quot;react
+        native&quot; &rarr; &quot;React Native&quot;).
       </p>
 
       {entries.length > 0 && (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-gray-400 text-left">
-              <th className="pb-2">Whisper Output</th>
-              <th className="pb-2">Corrected To</th>
-              <th className="pb-2 w-16"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map((entry, i) => (
-              <tr key={i}>
-                <td className="pr-2 pb-2">
-                  <input
-                    value={entry.from}
-                    onChange={(e) => updateRow(i, "from", e.target.value)}
-                    placeholder="whisper output"
-                    className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white placeholder-gray-600"
-                  />
-                </td>
-                <td className="pr-2 pb-2">
-                  <input
-                    value={entry.to}
-                    onChange={(e) => updateRow(i, "to", e.target.value)}
-                    placeholder="correction"
-                    className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white placeholder-gray-600"
-                  />
-                </td>
-                <td className="pb-2 text-center">
-                  <button
-                    onClick={() => removeRow(i)}
-                    className="text-red-400 hover:text-red-300 text-xs"
-                  >
-                    Remove
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <SettingsGroup>
+          {entries.map((entry, i) => (
+            <div key={i} className="settings-row">
+              <div className="flex-1 flex gap-2 items-center">
+                <input
+                  value={entry.from}
+                  onChange={(e) => updateRow(i, "from", e.target.value)}
+                  placeholder="whisper output"
+                  className="apple-input flex-1"
+                />
+                <span className="text-white/30">&rarr;</span>
+                <input
+                  value={entry.to}
+                  onChange={(e) => updateRow(i, "to", e.target.value)}
+                  placeholder="correction"
+                  className="apple-input flex-1"
+                />
+              </div>
+              <button
+                onClick={() => removeRow(i)}
+                className="text-white/30 hover:text-[#FF3B30] text-[11px] ml-2"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </SettingsGroup>
       )}
 
       <div className="flex gap-2 items-center">
-        <button
-          onClick={addRow}
-          className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm"
-        >
+        <button onClick={addRow} className="apple-button-secondary">
           + Add Entry
         </button>
-        <button
-          onClick={handleSave}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
-        >
+        <button onClick={handleSave} className="apple-button">
           Save Dictionary
         </button>
         {saved && (
-          <span className="text-green-400 text-xs">Saved!</span>
+          <span className="text-[#34C759] text-[11px]">Saved!</span>
         )}
       </div>
-    </div>
+    </>
   );
 }

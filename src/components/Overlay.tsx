@@ -1,9 +1,9 @@
 import { useEffect, useState, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useRecordingState } from "../hooks/useTauriEvents";
-import { rewriteLastTranscription } from "../lib/commands";
+import { rewriteAndInject } from "../lib/commands";
 
-type OverlayMode = "idle" | "recording" | "transcribing" | "rewrite-prompt" | "rewriting" | "rewrite-done";
+type OverlayMode = "idle" | "recording" | "transcribing" | "rewrite-prompt" | "rewriting" | "rewrite-done" | "rewrite-fallback";
 
 /** Animated waveform bars driven by audio levels from the backend. */
 /** Map level (0–1) to a color: green → cyan → blue → purple → red */
@@ -120,12 +120,18 @@ export default function Overlay() {
       setSegmentCount(0);
     });
 
+    const unlistenFallback = listen("rewrite-fallback", () => {
+      setMode("rewrite-fallback");
+      setTimeout(() => setMode("idle"), 2000);
+    });
+
     return () => {
       unlistenComplete.then((fn) => fn());
       unlistenRewriteStart.then((fn) => fn());
       unlistenRewriteDone.then((fn) => fn());
       unlistenRewriteError.then((fn) => fn());
       unlistenCleared.then((fn) => fn());
+      unlistenFallback.then((fn) => fn());
     };
   }, []);
 
@@ -133,7 +139,7 @@ export default function Overlay() {
     if (rewriteTimer) clearTimeout(rewriteTimer);
     setMode("rewriting");
     try {
-      await rewriteLastTranscription();
+      await rewriteAndInject();
       setMode("rewrite-done");
       setTimeout(() => setMode("idle"), 1500);
       setSegmentCount(0);
@@ -149,7 +155,7 @@ export default function Overlay() {
 
   return (
     <div className="overlay-window flex items-center justify-center h-screen">
-      <div className="flex items-center gap-3 rounded-full bg-black/80 px-5 py-3 shadow-2xl backdrop-blur-sm">
+      <div className="flex items-center gap-3 rounded-full bg-black/80 px-5 py-3 shadow-2xl backdrop-blur-xl border border-white/10">
         {mode === "recording" && (
           <>
             <span className="inline-block h-3 w-3 rounded-full bg-red-500 animate-pulse" />
@@ -192,6 +198,13 @@ export default function Overlay() {
           <>
             <span className="inline-block h-3 w-3 rounded-full bg-green-400" />
             <span className="text-sm font-medium text-white">Rewritten</span>
+          </>
+        )}
+
+        {mode === "rewrite-fallback" && (
+          <>
+            <span className="inline-block h-3 w-3 rounded-full bg-yellow-400" />
+            <span className="text-sm font-medium text-white">Copied to clipboard</span>
           </>
         )}
       </div>

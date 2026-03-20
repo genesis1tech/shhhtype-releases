@@ -45,6 +45,9 @@ pub struct Settings {
     /// Hotkey for AI rewrite (e.g., "CmdOrCtrl+Alt+R").
     #[serde(default = "default_rewrite_hotkey")]
     pub rewrite_hotkey: String,
+    /// Selected audio input device name. None = system default.
+    #[serde(default)]
+    pub audio_input_device: Option<String>,
 }
 
 fn default_vad_silence_timeout() -> f32 {
@@ -101,6 +104,7 @@ impl Default for Settings {
             rewrite_enabled: false,
             rewrite_style: RewriteStyle::Professional,
             rewrite_hotkey: default_rewrite_hotkey(),
+            audio_input_device: None,
         }
     }
 }

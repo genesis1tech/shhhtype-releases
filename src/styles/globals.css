@@ -1,12 +1,14 @@
 @import "tailwindcss";
 
 :root {
-  --bg-primary: #1a1a2e;
-  --bg-secondary: #16213e;
-  --accent: #0f3460;
-  --accent-light: #e94560;
-  --text-primary: #eee;
-  --text-secondary: #aaa;
+  --bg-primary: transparent;
+  --bg-secondary: rgba(255, 255, 255, 0.05);
+  --bg-elevated: rgba(255, 255, 255, 0.08);
+  --text-primary: rgba(255, 255, 255, 0.85);
+  --text-secondary: rgba(255, 255, 255, 0.55);
+  --text-tertiary: rgba(255, 255, 255, 0.30);
+  --separator: rgba(255, 255, 255, 0.10);
+  --accent: #007AFF;
 }
 
 html, body {
@@ -14,10 +16,11 @@ html, body {
   padding: 0;
   border: none;
   outline: none;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
   color: var(--text-primary);
   background: transparent;
   -webkit-font-smoothing: antialiased;
+  font-size: 13px;
 }
 
 #root {
@@ -26,7 +29,7 @@ html, body {
   outline: none;
 }
 
-/* Overlay window: fully transparent background */
+/* === Overlay Window === */
 .overlay-window {
   background: transparent;
   border: none;
@@ -34,8 +37,236 @@ html, body {
   overflow: hidden;
 }
 
-/* Settings window: dark background */
+/* === Settings / Welcome Window === */
 .settings-window {
-  background: var(--bg-primary);
+  background: transparent;
   min-height: 100vh;
+}
+
+/* === Settings Layout (sidebar + content) === */
+.settings-layout {
+  display: flex;
+  height: 100vh;
+}
+
+.settings-sidebar {
+  width: 200px;
+  padding: 52px 12px 12px;
+  border-right: 1px solid var(--separator);
+  flex-shrink: 0;
+  overflow-y: auto;
+  -webkit-app-region: drag;
+}
+
+.settings-content {
+  flex: 1;
+  padding: 52px 24px 24px;
+  overflow-y: auto;
+  min-height: 0;
+  -webkit-app-region: no-drag;
+}
+
+/* === Sidebar Items === */
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+  text-align: left;
+  -webkit-app-region: no-drag;
+}
+
+.sidebar-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-item.active {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* Sidebar icon badges */
+.sidebar-icon-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+
+.sidebar-icon-badge svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* === Settings Groups === */
+.settings-section-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  padding-left: 2px;
+}
+
+.settings-group {
+  background: var(--bg-elevated);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+/* === Settings Rows === */
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  min-height: 44px;
+}
+
+.settings-row + .settings-row {
+  border-top: 1px solid var(--separator);
+}
+
+/* === Apple Toggle Switch === */
+.apple-toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 38px;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 11px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+  border: none;
+  outline: none;
+}
+
+.apple-toggle::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.apple-toggle:checked {
+  background: var(--accent);
+}
+
+.apple-toggle:checked::before {
+  transform: translateX(16px);
+}
+
+/* === Form Controls === */
+.apple-input {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  padding: 4px 8px;
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.apple-input:focus {
+  border-color: var(--accent);
+}
+
+.apple-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.apple-select {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  padding: 4px 8px;
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+}
+
+.apple-select:focus {
+  border-color: var(--accent);
+}
+
+.apple-select option {
+  background: #2c2c2e;
+  color: white;
+}
+
+/* === Apple Buttons === */
+.apple-button {
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+
+.apple-button:hover {
+  opacity: 0.85;
+}
+
+.apple-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.apple-button-secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  border: none;
+  border-radius: 6px;
+  padding: 5px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.apple-button-secondary:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.apple-button-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* === Window Drag Regions === */
+.window-drag {
+  -webkit-app-region: drag;
+}
+
+.window-no-drag {
+  -webkit-app-region: no-drag;
 }

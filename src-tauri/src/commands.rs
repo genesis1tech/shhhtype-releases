@@ -1,5 +1,6 @@
 use crate::audio::capture::AudioCapture;
 use crate::audio::resampler::resample_to_16khz;
+use cpal::traits::{DeviceTrait, HostTrait};
 use crate::config::settings::{RewriteStyle, Settings, TranscriptionBackend};
 use crate::db::history::{HistoryEntry, HistoryQuery};
 use crate::license::{self, LicenseStatus};
@@ -45,9 +46,11 @@ pub fn do_start_recording(state: &Arc<AppState>, app: Option<AppHandle>) -> Resu
     // Convert seconds to frame count (each frame ~50ms)
     let vad_silence_frames = (config.vad_silence_timeout / 0.05).round() as usize;
 
+    let audio_device = config.audio_input_device.clone();
+
     let handle = std::thread::spawn(move || {
         let mut capture = AudioCapture::new();
-        if let Err(e) = capture.start(buffer.clone()) {
+        if let Err(e) = capture.start(buffer.clone(), audio_device.as_deref()) {
             log::error!("Audio capture failed to start: {}", e);
             return;
         }
@@ -138,9 +141,7 @@ pub fn do_stop_and_transcribe(state: &Arc<AppState>) -> Result<String, String> {
 
     let raw_samples = {
         let mut buf = state.audio_buffer.lock();
-        let samples = buf.clone();
-        buf.clear();
-        samples
+        std::mem::take(&mut *buf)
     };
 
     if raw_samples.is_empty() {
@@ -155,24 +156,42 @@ pub fn do_stop_and_transcribe(state: &Arc<AppState>) -> Result<String, String> {
         raw_samples.len() as f32 / sample_rate as f32
     );
 
-    let samples_16k = resample_to_16khz(&raw_samples, sample_rate)
-        .map_err(|e| format!("Resampling failed: {}", e))?;
-
-    log::info!("Resampled to {} samples at 16kHz", samples_16k.len());
+    // Check if the recording contains any speech by measuring RMS energy.
+    // Whisper hallucinates phrases like "Thank you" when fed silence.
+    let rms = crate::vad::energy::EnergyVad::rms(&raw_samples);
+    let silence_floor = 0.002;
+    if rms < silence_floor {
+        log::info!(
+            "Audio RMS ({:.6}) below silence floor ({:.6}), skipping transcription (silence only)",
+            rms,
+            silence_floor
+        );
+        state.set_state(STATE_IDLE);
+        return Ok(String::new());
+    }
+    log::info!("Audio RMS: {:.6} (silence floor: {:.6})", rms, silence_floor);
 
     let config = state.config.read().clone();
     let transcribed_text = match config.transcription_backend {
         TranscriptionBackend::Cloud => {
+            // Cloud: send raw audio at native sample rate — Groq downsamples server-side.
+            // This skips the expensive client-side resampling step entirely.
             let api_key = config.groq_api_key.as_deref().unwrap_or("");
             if api_key.is_empty() {
                 state.set_state(STATE_IDLE);
                 return Err("Groq API key not set. Configure it in Settings > General.".into());
             }
-            log::info!("Transcribing via Groq cloud...");
-            crate::transcribe::groq::transcribe(&samples_16k, &config.language, api_key, Some(&state.groq_usage))
+            log::info!("Transcribing via Groq cloud (skipping resample, sending {}Hz)...", sample_rate);
+            crate::transcribe::groq::transcribe(&raw_samples, sample_rate, &config.language, api_key, Some(&state.groq_usage))
                 .map_err(|e| format!("Cloud transcription failed: {}", e))?
         }
         TranscriptionBackend::Local => {
+            // Local Whisper requires 16kHz — resample if needed
+            let resample_start = Instant::now();
+            let samples_16k = resample_to_16khz(&raw_samples, sample_rate)
+                .map_err(|e| format!("Resampling failed: {}", e))?;
+            log::info!("Resampled to {} samples at 16kHz in {:?}", samples_16k.len(), resample_start.elapsed());
+
             {
                 let mut engine = state.whisper_engine.lock();
                 if !engine.is_loaded() {
@@ -199,19 +218,14 @@ pub fn do_stop_and_transcribe(state: &Arc<AppState>) -> Result<String, String> {
         }
     };
 
-    let dict_path = state.data_dir.join("dictionary.json");
-    let final_text = if let Ok(dict) = crate::transcribe::dictionary::Dictionary::load(&dict_path)
-    {
+    let final_text = {
+        let mut cache = state.dictionary_cache.lock();
+        let dict = cache.get_or_insert_with(|| {
+            let dict_path = state.data_dir.join("dictionary.json");
+            crate::transcribe::dictionary::Dictionary::load(&dict_path).unwrap_or_default()
+        });
         dict.correct(&transcribed_text)
-    } else {
-        transcribed_text
     };
-
-    // Store last transcription for AI rewrite
-    *state.last_transcription.lock() = Some(final_text.clone());
-
-    // Append to composition buffer for multi-segment rewrite
-    state.composition.lock().append(final_text.clone());
 
     state.set_state(STATE_IDLE);
     log::info!("Transcription complete: {}", final_text);
@@ -286,10 +300,31 @@ pub fn get_settings(state: State<'_, Arc<AppState>>) -> Settings {
 }
 
 #[tauri::command]
-pub fn update_settings(state: State<'_, Arc<AppState>>, settings: Settings) -> Result<(), String> {
+pub fn update_settings(
+    app: tauri::AppHandle,
+    state: State<'_, Arc<AppState>>,
+    settings: Settings,
+) -> Result<(), String> {
+    let old = state.config.read().clone();
+    let hotkey_changed = old.shortcut != settings.shortcut || old.rewrite_hotkey != settings.rewrite_hotkey;
+
     settings.save(&state.data_dir).map_err(|e| e.to_string())?;
     *state.config.write() = settings;
+
+    // Global hotkeys are registered once at startup via the OS Carbon API.
+    // The tauri-plugin-global-shortcut plugin cannot reliably re-register
+    // shortcuts at runtime, so notify the frontend that a restart is needed.
+    if hotkey_changed {
+        log::info!("Hotkey changed — restart required to take effect");
+        let _ = app.emit("hotkey-restart-required", ());
+    }
+
     Ok(())
+}
+
+#[tauri::command]
+pub fn restart_app(app: tauri::AppHandle) {
+    app.restart();
 }
 
 #[tauri::command]
@@ -339,7 +374,10 @@ pub fn update_dictionary(
 ) -> Result<(), String> {
     let dict_path = state.data_dir.join("dictionary.json");
     let dict = crate::transcribe::dictionary::Dictionary::from_entries(entries);
-    dict.save(&dict_path).map_err(|e| e.to_string())
+    dict.save(&dict_path).map_err(|e| e.to_string())?;
+    // Invalidate cache so next transcription picks up changes
+    *state.dictionary_cache.lock() = None;
+    Ok(())
 }
 
 #[tauri::command]
@@ -521,42 +559,6 @@ pub fn rewrite_last_transcription(
     Ok(RewriteResult { text: rewritten, is_multi })
 }
 
-/// Undo the last paste (Cmd+Z) then inject new text. Used by rewrite flow.
-pub fn undo_and_inject(text: &str, injection_method: &crate::config::settings::InjectionMethod) -> Result<(), String> {
-    // Simulate Cmd+Z to undo the original paste
-    #[cfg(target_os = "macos")]
-    {
-        use core_graphics::event::{CGEvent, CGEventFlags};
-        use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
-
-        let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState)
-            .map_err(|_| "Failed to create event source")?;
-
-        // Cmd+Z (keycode 6 = Z)
-        let key_down = CGEvent::new_keyboard_event(source.clone(), 6, true)
-            .map_err(|_| "Failed to create key event")?;
-        key_down.set_flags(CGEventFlags::CGEventFlagCommand);
-        key_down.post(core_graphics::event::CGEventTapLocation::HID);
-
-        let key_up = CGEvent::new_keyboard_event(source, 6, false)
-            .map_err(|_| "Failed to create key event")?;
-        key_up.set_flags(CGEventFlags::CGEventFlagCommand);
-        key_up.post(core_graphics::event::CGEventTapLocation::HID);
-
-        std::thread::sleep(std::time::Duration::from_millis(100));
-    }
-
-    // Inject the rewritten text
-    match injection_method {
-        crate::config::settings::InjectionMethod::Clipboard => {
-            crate::inject::clipboard::inject_via_clipboard(text).map_err(|e| e.to_string())
-        }
-        crate::config::settings::InjectionMethod::Keyboard => {
-            crate::inject::keyboard::inject_via_keyboard(text).map_err(|e| e.to_string())
-        }
-    }
-}
-
 /// Select `char_count` characters backward from cursor, then paste replacement.
 /// Uses Shift+Left Arrow to build a selection, then clipboard paste to replace it.
 pub fn select_back_and_inject(char_count: usize, text: &str) -> Result<(), String> {
@@ -571,21 +573,20 @@ pub fn select_back_and_inject(char_count: usize, text: &str) -> Result<(), Strin
         log::info!("Selecting {} chars backward for replacement...", char_count);
 
         // Left Arrow keycode = 123. Send with Shift flag to extend selection.
-        for i in 0..char_count {
+        for _i in 0..char_count {
             let key_down = CGEvent::new_keyboard_event(source.clone(), 123, true)
                 .map_err(|_| "Failed to create key event")?;
             key_down.set_flags(CGEventFlags::CGEventFlagShift);
-            key_down.post(core_graphics::event::CGEventTapLocation::HID);
+            key_down.post(core_graphics::event::CGEventTapLocation::AnnotatedSession);
 
             let key_up = CGEvent::new_keyboard_event(source.clone(), 123, false)
                 .map_err(|_| "Failed to create key event")?;
             key_up.set_flags(CGEventFlags::CGEventFlagShift);
-            key_up.post(core_graphics::event::CGEventTapLocation::HID);
+            key_up.post(core_graphics::event::CGEventTapLocation::AnnotatedSession);
 
-            // 1ms delay per event to let the target app process reliably
-            if (i + 1) % 2 == 0 {
-                std::thread::sleep(std::time::Duration::from_millis(1));
-            }
+            // 2ms delay per arrow key to let the target app process reliably
+            // (matches keyboard injection timing in inject/keyboard.rs)
+            std::thread::sleep(std::time::Duration::from_millis(2));
         }
 
         // Wait for selection to settle
@@ -595,6 +596,63 @@ pub fn select_back_and_inject(char_count: usize, text: &str) -> Result<(), Strin
 
     // Paste rewritten text — replaces the selection
     crate::inject::clipboard::inject_via_clipboard(text).map_err(|e| e.to_string())
+}
+
+/// Rewrite and inject: rewrites composition buffer text, then uses selection-based
+/// replacement to swap the original injected text with the rewritten version.
+/// Called from the overlay "Rewrite?" button. On failure, copies to clipboard as fallback.
+///
+/// NOTE: Selection-based replacement assumes the cursor hasn't moved since injection.
+/// If the user clicks elsewhere or uses arrow keys between injection and rewrite,
+/// the selection will be wrong. This is an accepted trade-off — still far more
+/// reliable than undo-based replacement.
+#[tauri::command]
+pub fn rewrite_and_inject(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+    style: Option<RewriteStyle>,
+) -> Result<RewriteResult, String> {
+    let config = state.config.read().clone();
+
+    let api_key = config.groq_api_key.as_deref().unwrap_or("");
+    if api_key.is_empty() {
+        return Err("Groq API key not set. Configure it in Settings > General.".into());
+    }
+
+    let (text, is_multi, char_count) = {
+        let buf = state.composition.lock();
+        if buf.len() == 0 {
+            let last_text = state.last_transcription.lock().clone();
+            let t = last_text.ok_or("No recent transcription to rewrite")?;
+            let cc = t.chars().count();
+            (t, false, cc)
+        } else {
+            (buf.join(), buf.is_multi(), buf.injected_chars())
+        }
+    };
+
+    let rewrite_style = style.unwrap_or(config.rewrite_style);
+    log::info!("Rewrite-and-inject: {} segment(s), {} chars, style: {:?}",
+        if is_multi { "multiple" } else { "single" }, char_count, rewrite_style);
+
+    let rewritten = crate::rewrite::rewrite_text(&text, &rewrite_style, api_key, Some(&state.groq_usage))
+        .map_err(|e| format!("Rewrite failed: {}", e))?;
+
+    // Select-back and replace the original injected text
+    if let Err(e) = select_back_and_inject(char_count, &rewritten) {
+        log::error!("Rewrite injection failed, falling back to clipboard: {}", e);
+        // Fallback: copy rewritten text to clipboard and notify frontend
+        let _ = crate::inject::clipboard::copy_to_clipboard(&rewritten);
+        let _ = app.emit("rewrite-fallback", "Copied to clipboard");
+        // Still clear buffers — the rewrite itself succeeded
+    }
+
+    // Clear both buffers after successful rewrite
+    state.composition.lock().clear();
+    *state.last_transcription.lock() = None;
+
+    log::info!("Rewrite-and-inject complete: {}", rewritten);
+    Ok(RewriteResult { text: rewritten, is_multi })
 }
 
 #[tauri::command]
@@ -631,4 +689,30 @@ pub fn clear_composition(state: State<'_, Arc<AppState>>) {
 #[tauri::command]
 pub fn get_composition_count(state: State<'_, Arc<AppState>>) -> usize {
     state.composition.lock().len()
+}
+
+/// Audio input device info returned to the frontend.
+#[derive(serde::Serialize)]
+pub struct AudioDevice {
+    pub name: String,
+    pub is_default: bool,
+}
+
+#[tauri::command]
+pub fn list_audio_devices() -> Vec<AudioDevice> {
+    let host = cpal::default_host();
+    let default_name = host
+        .default_input_device()
+        .and_then(|d| d.name().ok());
+    host.input_devices()
+        .map(|devices| {
+            devices
+                .filter_map(|d| {
+                    let name = d.name().ok()?;
+                    let is_default = default_name.as_deref() == Some(&name);
+                    Some(AudioDevice { name, is_default })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }

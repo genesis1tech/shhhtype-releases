@@ -54,12 +54,15 @@ pub fn run() {
             commands::download_model,
             commands::delete_model,
             commands::rewrite_last_transcription,
+            commands::rewrite_and_inject,
             commands::get_groq_usage,
             commands::activate_license,
             commands::get_license_status,
             commands::deactivate_license,
             commands::clear_composition,
             commands::get_composition_count,
+            commands::list_audio_devices,
+            commands::restart_app,
         ])
         .setup(|app| {
             // Set up the system tray
@@ -70,8 +73,9 @@ pub fn run() {
             let state = app_handle.state::<Arc<AppState>>();
             state.init_db()?;
 
-            // Request permissions on startup so the app appears in System Settings
-            commands::request_microphone_permission();
+            // Request accessibility permission on startup so the app appears in
+            // System Settings > Accessibility. Microphone permission is requested
+            // via the onboarding wizard or when the user first tries to record.
             commands::request_accessibility_permission();
 
             // Create overlay window (hidden, transparent, click-through)
@@ -116,11 +120,11 @@ pub fn run() {
 
             // Register global hotkey for recording
             let shortcut_str = state.config.read().shortcut.clone();
-            register_hotkey(app, &shortcut_str);
+            register_hotkey(&app.handle().clone(), &shortcut_str);
 
             // Register rewrite hotkey
             let rewrite_shortcut = state.config.read().rewrite_hotkey.clone();
-            register_rewrite_hotkey(app, &rewrite_shortcut);
+            register_rewrite_hotkey(&app.handle().clone(), &rewrite_shortcut);
 
             // Show welcome/onboarding on first launch
             let onboarding_flag = state.data_dir.join(".onboarding_complete");
@@ -137,9 +141,9 @@ pub fn run() {
         .expect("error while running ShhhType");
 }
 
-/// Register (or re-register) the global hotkey.
-fn register_hotkey(app: &tauri::App, shortcut_str: &str) {
-    if let Err(e) = app.handle().global_shortcut().on_shortcut(
+/// Register (or re-register) the global recording hotkey.
+pub fn register_hotkey(app: &tauri::AppHandle, shortcut_str: &str) {
+    if let Err(e) = app.global_shortcut().on_shortcut(
         shortcut_str,
         |app_handle, _shortcut, event| {
             let state = app_handle.state::<Arc<AppState>>();
@@ -190,15 +194,6 @@ fn register_hotkey(app: &tauri::App, shortcut_str: &str) {
                                 sound::play_stop_sound();
                             }
 
-                            let segment_count = state.composition.lock().len();
-                            let _ = app.emit(
-                                "transcription-complete",
-                                commands::TranscriptionCompletePayload {
-                                    text: text.clone(),
-                                    segment_count,
-                                },
-                            );
-
                             // Save to history DB with actual duration
                             save_to_history(&state, &text, duration_ms);
 
@@ -206,7 +201,7 @@ fn register_hotkey(app: &tauri::App, shortcut_str: &str) {
                             send_notification(&app, &text);
 
                             // Inject text into focused app
-                            let result = match config.injection_method {
+                            let injection_ok = match config.injection_method {
                                 InjectionMethod::Clipboard => {
                                     inject::clipboard::inject_via_clipboard(&text)
                                 }
@@ -221,9 +216,23 @@ fn register_hotkey(app: &tauri::App, shortcut_str: &str) {
                                     res
                                 }
                             };
-                            if let Err(e) = result {
-                                log::error!("Text injection failed: {}", e);
+
+                            // Only stage composition after injection succeeds
+                            if injection_ok.is_ok() {
+                                *state.last_transcription.lock() = Some(text.clone());
+                                state.composition.lock().append(text.clone(), config.injection_method.clone());
+                            } else {
+                                log::error!("Text injection failed: {}", injection_ok.unwrap_err());
                             }
+
+                            let segment_count = state.composition.lock().len();
+                            let _ = app.emit(
+                                "transcription-complete",
+                                commands::TranscriptionCompletePayload {
+                                    text: text.clone(),
+                                    segment_count,
+                                },
+                            );
 
                             // If rewrite is enabled, keep overlay visible with
                             // click-through disabled so user can click "Rewrite?"
@@ -256,8 +265,8 @@ fn register_hotkey(app: &tauri::App, shortcut_str: &str) {
 }
 
 /// Register the AI rewrite hotkey.
-fn register_rewrite_hotkey(app: &tauri::App, shortcut_str: &str) {
-    if let Err(e) = app.handle().global_shortcut().on_shortcut(
+pub fn register_rewrite_hotkey(app: &tauri::AppHandle, shortcut_str: &str) {
+    if let Err(e) = app.global_shortcut().on_shortcut(
         shortcut_str,
         |app_handle, _shortcut, event| {
             if event.state != ShortcutState::Pressed {
@@ -293,24 +302,36 @@ fn register_rewrite_hotkey(app: &tauri::App, shortcut_str: &str) {
                 let _ = app.emit("rewrite-started", ());
 
                 // Read from composition buffer; fall back to last_transcription
-                let (text, is_multi, injected_chars) = {
+                let (text, is_multi, segment_count) = {
                     let buf = state.composition.lock();
                     if buf.len() == 0 {
                         let last = state.last_transcription.lock().clone().unwrap_or_default();
-                        (last, false, 0usize)
+                        (last, false, 1usize)
                     } else {
-                        (buf.join(), buf.is_multi(), buf.injected_chars())
+                        (buf.join(), buf.is_multi(), buf.len())
                     }
                 };
                 let config = state.config.read().clone();
 
+                // Read injected char count for selection-based replacement
+                let char_count = {
+                    let buf = state.composition.lock();
+                    if buf.len() == 0 {
+                        text.chars().count()
+                    } else {
+                        buf.injected_chars()
+                    }
+                };
+
                 match rewrite::rewrite_text(&text, &config.rewrite_style, config.groq_api_key.as_deref().unwrap_or(""), Some(&state.groq_usage)) {
                     Ok(rewritten) => {
-                        log::info!("Rewrite complete (multi={}, injected_chars={}): {}", is_multi, injected_chars, rewritten);
+                        log::info!("Rewrite complete (multi={}, chars={}): {}", is_multi, char_count, rewritten);
 
-                        // Select backward the exact number of injected characters, then replace
-                        if let Err(e) = commands::select_back_and_inject(injected_chars, &rewritten) {
-                            log::error!("Rewrite injection failed: {}", e);
+                        // Select-back and replace the original injected text
+                        if let Err(e) = commands::select_back_and_inject(char_count, &rewritten) {
+                            log::error!("Rewrite injection failed, falling back to clipboard: {}", e);
+                            let _ = crate::inject::clipboard::copy_to_clipboard(&rewritten);
+                            let _ = app.emit("rewrite-fallback", "Copied to clipboard");
                         }
 
                         // Clear composition buffer and last_transcription to prevent re-rewriting

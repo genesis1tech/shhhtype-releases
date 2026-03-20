@@ -11,6 +11,7 @@ import type {
   RewriteStyle,
   LicenseStatus,
   GroqUsage,
+  AudioDevice,
 } from "./types";
 
 /** Start audio recording */
@@ -77,6 +78,10 @@ export const exportHistory = () =>
 export const rewriteLastTranscription = (style?: RewriteStyle) =>
   invoke<{ text: string; is_multi: boolean }>("rewrite_last_transcription", { style: style ?? null });
 
+/** Rewrite and inject: rewrites composition text, then selects-back and replaces in the target app */
+export const rewriteAndInject = (style?: RewriteStyle) =>
+  invoke<{ text: string; is_multi: boolean }>("rewrite_and_inject", { style: style ?? null });
+
 /** Get Groq API rate limit usage */
 export const getGroqUsage = () => invoke<GroqUsage>("get_groq_usage");
 
@@ -98,3 +103,10 @@ export const clearComposition = () => invoke<void>("clear_composition");
 /** Get number of segments in composition buffer */
 export const getCompositionCount = () =>
   invoke<number>("get_composition_count");
+
+/** List available audio input devices */
+export const listAudioDevices = () =>
+  invoke<AudioDevice[]>("list_audio_devices");
+
+/** Restart the app (to apply hotkey changes) */
+export const restartApp = () => invoke<void>("restart_app");

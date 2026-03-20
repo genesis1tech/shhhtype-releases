@@ -7,6 +7,7 @@ export type TranscriptionBackend = "Local" | "Cloud";
 /** AI rewrite style */
 export type RewriteStyle = "Professional" | "Casual" | "Concise" | "Friendly";
 
+
 /** License status */
 export type LicenseStatus = "Free" | "Licensed" | "Invalid";
 
@@ -28,6 +29,13 @@ export interface Settings {
   rewrite_enabled: boolean;
   rewrite_style: RewriteStyle;
   rewrite_hotkey: string;
+  audio_input_device: string | null;
+}
+
+/** Audio input device info */
+export interface AudioDevice {
+  name: string;
+  is_default: boolean;
 }
 
 export type ModelSize =

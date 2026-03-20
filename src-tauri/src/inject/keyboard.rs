@@ -28,11 +28,11 @@ pub fn inject_via_keyboard(text: &str) -> Result<()> {
                 CGEvent::new_keyboard_event(source.clone(), dummy_keycode, false)
                     .map_err(|_| anyhow::anyhow!("Failed to create key event"))?;
 
-            key_down.post(core_graphics::event::CGEventTapLocation::HID);
-            key_up.post(core_graphics::event::CGEventTapLocation::HID);
+            key_down.post(core_graphics::event::CGEventTapLocation::AnnotatedSession);
+            key_up.post(core_graphics::event::CGEventTapLocation::AnnotatedSession);
 
             // Small delay between keystrokes to not overwhelm the target app
-            std::thread::sleep(std::time::Duration::from_millis(5));
+            std::thread::sleep(std::time::Duration::from_millis(2));
         }
 
         log::info!("Injected {} chars via keyboard simulation", text.len());

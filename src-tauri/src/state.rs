@@ -1,4 +1,4 @@
-use crate::config::settings::Settings;
+use crate::config::settings::{InjectionMethod, Settings};
 use crate::transcribe::engine::WhisperEngine;
 use parking_lot::{Mutex, RwLock};
 use rusqlite::Connection;
@@ -46,10 +46,17 @@ const BUFFER_TTL_SECS: u64 = 1800;
 /// Maximum entries in the composition buffer.
 const BUFFER_MAX_ENTRIES: usize = 20;
 
+/// A single transcription segment with metadata for rewrite replacement.
+pub struct CompositionSegment {
+    pub text: String,
+    pub char_count: usize,
+    pub injection_method: InjectionMethod,
+}
+
 /// Accumulates transcription segments for multi-segment rewrite.
 pub struct CompositionBuffer {
-    entries: Vec<String>,
-    /// Total characters injected across all segments (for deletion on rewrite).
+    entries: Vec<CompositionSegment>,
+    /// Total characters injected across all segments (for selection-based replacement on rewrite).
     injected_chars: usize,
     last_appended_at: Option<Instant>,
 }
@@ -64,7 +71,7 @@ impl CompositionBuffer {
     }
 
     /// Append a transcription segment. Clears stale entries if TTL expired, drops oldest if at max cap.
-    pub fn append(&mut self, text: String) {
+    pub fn append(&mut self, text: String, injection_method: InjectionMethod) {
         // Clear if TTL expired
         if let Some(last) = self.last_appended_at {
             if last.elapsed().as_secs() >= BUFFER_TTL_SECS {
@@ -75,10 +82,11 @@ impl CompositionBuffer {
         // Drop oldest if at max
         if self.entries.len() >= BUFFER_MAX_ENTRIES {
             let removed = self.entries.remove(0);
-            self.injected_chars = self.injected_chars.saturating_sub(removed.chars().count());
+            self.injected_chars = self.injected_chars.saturating_sub(removed.char_count);
         }
-        self.injected_chars += text.chars().count();
-        self.entries.push(text);
+        let char_count = text.chars().count();
+        self.injected_chars += char_count;
+        self.entries.push(CompositionSegment { text, char_count, injection_method });
         self.last_appended_at = Some(Instant::now());
     }
 
@@ -88,9 +96,9 @@ impl CompositionBuffer {
         self.last_appended_at = None;
     }
 
-    /// Join all entries with a space separator.
+    /// Join all entry texts with a space separator.
     pub fn join(&self) -> String {
-        self.entries.join(" ")
+        self.entries.iter().map(|s| s.text.as_str()).collect::<Vec<_>>().join(" ")
     }
 
     pub fn len(&self) -> usize {
@@ -132,6 +140,8 @@ pub struct AppState {
     pub groq_usage: Mutex<GroqUsage>,
     /// Composition buffer for multi-segment rewrite.
     pub composition: Mutex<CompositionBuffer>,
+    /// Cached dictionary to avoid disk I/O on every transcription.
+    pub dictionary_cache: Mutex<Option<crate::transcribe::dictionary::Dictionary>>,
 }
 
 impl AppState {
@@ -158,6 +168,7 @@ impl AppState {
             last_transcription: Mutex::new(None),
             groq_usage: Mutex::new(GroqUsage::default()),
             composition: Mutex::new(CompositionBuffer::new()),
+            dictionary_cache: Mutex::new(None),
         }
     }
 

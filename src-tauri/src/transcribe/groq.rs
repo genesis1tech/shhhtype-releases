@@ -4,27 +4,39 @@ use hound::{SampleFormat, WavSpec, WavWriter};
 use parking_lot::Mutex;
 use serde::Deserialize;
 use std::io::Cursor;
+use std::sync::LazyLock;
 
 const GROQ_API_URL: &str = "https://api.groq.com/openai/v1/audio/transcriptions";
+
+/// Reuse a single HTTP client across requests (saves TLS handshake).
+static HTTP_CLIENT: LazyLock<reqwest::blocking::Client> = LazyLock::new(|| {
+    reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .expect("Failed to build HTTP client")
+});
 
 #[derive(Deserialize)]
 struct GroqResponse {
     text: String,
 }
 
-/// Encode f32 PCM samples (16kHz mono) to WAV bytes in memory.
-fn encode_wav(samples: &[f32]) -> Result<Vec<u8>> {
+/// Encode f32 PCM samples to 16-bit WAV bytes in memory.
+/// Accepts any sample rate — Groq handles downsampling server-side.
+fn encode_wav(samples: &[f32], sample_rate: u32) -> Result<Vec<u8>> {
     let spec = WavSpec {
         channels: 1,
-        sample_rate: 16000,
-        bits_per_sample: 32,
-        sample_format: SampleFormat::Float,
+        sample_rate,
+        bits_per_sample: 16,
+        sample_format: SampleFormat::Int,
     };
-    let mut cursor = Cursor::new(Vec::new());
+    let mut cursor = Cursor::new(Vec::with_capacity(samples.len() * 2 + 44));
     {
         let mut writer = WavWriter::new(&mut cursor, spec)?;
         for &s in samples {
-            writer.write_sample(s)?;
+            let clamped = s.clamp(-1.0, 1.0);
+            let i16_val = (clamped * 32767.0) as i16;
+            writer.write_sample(i16_val)?;
         }
         writer.finalize()?;
     }
@@ -32,17 +44,26 @@ fn encode_wav(samples: &[f32]) -> Result<Vec<u8>> {
 }
 
 /// Send audio to Groq's Whisper API and return transcribed text.
-/// Uses whisper-large-v3-turbo (best speed/accuracy balance on Groq).
-pub fn transcribe(samples: &[f32], language: &str, api_key: &str, usage: Option<&Mutex<GroqUsage>>) -> Result<String> {
-    let wav_bytes = encode_wav(samples)?;
+/// Uses distil-whisper for English (faster, cheaper) or whisper-large-v3-turbo for other languages.
+pub fn transcribe(
+    samples: &[f32],
+    sample_rate: u32,
+    language: &str,
+    api_key: &str,
+    usage: Option<&Mutex<GroqUsage>>,
+) -> Result<String> {
+    let wav_bytes = encode_wav(samples, sample_rate)?;
+    log::info!("WAV encoded: {} bytes ({} samples at {}Hz)", wav_bytes.len(), samples.len(), sample_rate);
 
     let part = reqwest::blocking::multipart::Part::bytes(wav_bytes)
         .file_name("audio.wav")
         .mime_str("audio/wav")
         .map_err(|e| anyhow!("Invalid MIME type: {}", e))?;
 
+    // whisper-large-v3-turbo: best speed/accuracy balance on Groq
+    let model = "whisper-large-v3-turbo";
+
     let lang = if language == "auto" {
-        // Groq doesn't support "auto" — omit language field for auto-detection
         None
     } else {
         Some(language.to_string())
@@ -50,18 +71,16 @@ pub fn transcribe(samples: &[f32], language: &str, api_key: &str, usage: Option<
 
     let mut form = reqwest::blocking::multipart::Form::new()
         .part("file", part)
-        .text("model", "whisper-large-v3-turbo")
+        .text("model", model)
         .text("response_format", "json");
 
     if let Some(l) = lang {
         form = form.text("language", l);
     }
 
-    let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()?;
+    log::info!("Sending to Groq (model: {})...", model);
 
-    let resp = client
+    let resp = HTTP_CLIENT
         .post(GROQ_API_URL)
         .header("Authorization", format!("Bearer {}", api_key))
         .multipart(form)
