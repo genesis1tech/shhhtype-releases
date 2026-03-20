@@ -612,6 +612,9 @@ pub fn rewrite_and_inject(
     state: State<'_, Arc<AppState>>,
     style: Option<RewriteStyle>,
 ) -> Result<RewriteResult, String> {
+    // Bump generation to invalidate any pending 3s hide timer from recording
+    state.overlay_generation.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
     let config = state.config.read().clone();
 
     let api_key = config.groq_api_key.as_deref().unwrap_or("");
@@ -650,6 +653,15 @@ pub fn rewrite_and_inject(
     // Clear both buffers after successful rewrite
     state.composition.lock().clear();
     *state.last_transcription.lock() = None;
+    crate::tray::setup::update_tray_segment_count(&app, 0);
+
+    // Hide overlay after a short delay so user sees "Rewritten" status
+    let app_for_hide = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+        crate::windows::disable_overlay_interaction(&app_for_hide);
+        crate::windows::hide_overlay(&app_for_hide);
+    });
 
     log::info!("Rewrite-and-inject complete: {}", rewritten);
     Ok(RewriteResult { text: rewritten, is_multi })
@@ -681,8 +693,9 @@ pub fn deactivate_license(state: State<'_, Arc<AppState>>) -> Result<(), String>
 }
 
 #[tauri::command]
-pub fn clear_composition(state: State<'_, Arc<AppState>>) {
+pub fn clear_composition(app: AppHandle, state: State<'_, Arc<AppState>>) {
     state.composition.lock().clear();
+    crate::tray::setup::update_tray_segment_count(&app, 0);
     log::info!("Composition buffer cleared");
 }
 

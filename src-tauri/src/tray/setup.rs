@@ -44,6 +44,138 @@ fn build_audio_submenu(app: &App, selected: &Option<String>) -> Result<Submenu<t
     Ok(submenu)
 }
 
+/// Update the tray title to show segment count as a small red number.
+/// Shows nothing when count is 0.
+pub fn update_tray_segment_count(app: &tauri::AppHandle, count: usize) {
+    if let Some(tray) = app.tray_by_id("main") {
+        if count > 0 {
+            let title = format!("{}", count);
+            // Set plain title first (required by muda internals)
+            let _ = tray.set_title(Some(&title));
+
+            // Style it: red color, small font (50% of default ~13pt → ~7pt)
+            #[cfg(target_os = "macos")]
+            style_tray_title_red(&title);
+        } else {
+            let _ = tray.set_title(None::<&str>);
+        }
+    }
+}
+
+/// Dispatch styled tray title update to the main thread.
+/// Finds the NSStatusBarButton and sets an attributedTitle with red color + small font.
+#[cfg(target_os = "macos")]
+fn style_tray_title_red(title: &str) {
+    // We need to box the title string and pass it as context to GCD
+    let title_owned = title.to_string();
+    let boxed = Box::into_raw(Box::new(title_owned));
+
+    extern "C" fn do_style(ctx: *mut std::ffi::c_void) {
+        unsafe {
+            let title = Box::from_raw(ctx as *mut String);
+            style_tray_title_red_main_thread(&title);
+        }
+    }
+
+    unsafe {
+        extern "C" {
+            static _dispatch_main_q: u8;
+            fn dispatch_async_f(
+                queue: *const u8,
+                context: *mut std::ffi::c_void,
+                work: extern "C" fn(*mut std::ffi::c_void),
+            );
+        }
+        dispatch_async_f(
+            std::ptr::addr_of!(_dispatch_main_q),
+            boxed as *mut std::ffi::c_void,
+            do_style,
+        );
+    }
+}
+
+/// Must be called on the main thread. Finds the NSStatusBarButton and sets
+/// an attributed title with red color and small font.
+#[cfg(target_os = "macos")]
+unsafe fn style_tray_title_red_main_thread(title: &str) {
+    use cocoa::base::{id, nil};
+    use cocoa::foundation::NSString;
+    use objc::runtime::Class;
+    use objc::{msg_send, sel, sel_impl};
+
+    // Build attributes: red color, tiny font, raised baseline
+    let font: id = msg_send![
+        Class::get("NSFont").unwrap(),
+        monospacedDigitSystemFontOfSize: 3.5_f64
+        weight: 0.4_f64  // NSFontWeightSemibold for legibility at small size
+    ];
+    let red: id = msg_send![Class::get("NSColor").unwrap(), systemRedColor];
+
+    // Positive baseline offset moves text upward
+    let baseline_offset: id = msg_send![Class::get("NSNumber").unwrap(), numberWithDouble: 4.0_f64];
+
+    let font_key = NSString::alloc(nil).init_str("NSFont");
+    let color_key = NSString::alloc(nil).init_str("NSColor");
+    let baseline_key = NSString::alloc(nil).init_str("NSBaselineOffset");
+    let keys = [font_key, color_key, baseline_key];
+    let vals = [font, red, baseline_offset];
+
+    let attrs: id = msg_send![
+        Class::get("NSDictionary").unwrap(),
+        dictionaryWithObjects: vals.as_ptr()
+        forKeys: keys.as_ptr()
+        count: 3_usize
+    ];
+
+    let ns_title = NSString::alloc(nil).init_str(title);
+    let attr_str: id = msg_send![Class::get("NSAttributedString").unwrap(), alloc];
+    let attr_str: id = msg_send![attr_str, initWithString: ns_title attributes: attrs];
+
+    // Find our NSStatusBarButton by iterating app windows.
+    // NSStatusItem buttons live inside private NSStatusBarWindow instances.
+    let ns_app: id = msg_send![Class::get("NSApplication").unwrap(), sharedApplication];
+    let windows: id = msg_send![ns_app, windows];
+    let win_count: usize = msg_send![windows, count];
+
+    for i in 0..win_count {
+        let window: id = msg_send![windows, objectAtIndex: i];
+        let class_name: id = msg_send![window, className];
+        if class_name == nil {
+            continue;
+        }
+        let name_cstr: *const std::ffi::c_char = msg_send![class_name, UTF8String];
+        if name_cstr.is_null() {
+            continue;
+        }
+        let name = std::ffi::CStr::from_ptr(name_cstr).to_str().unwrap_or("");
+
+        if name == "NSStatusBarWindow" {
+            let content_view: id = msg_send![window, contentView];
+            if content_view == nil {
+                continue;
+            }
+            // Check if contentView responds to title
+            let responds: bool = msg_send![content_view, respondsToSelector: sel!(title)];
+            if !responds {
+                continue;
+            }
+            let btn_title: id = msg_send![content_view, title];
+            if btn_title == nil {
+                continue;
+            }
+            let btn_cstr: *const std::ffi::c_char = msg_send![btn_title, UTF8String];
+            if btn_cstr.is_null() {
+                continue;
+            }
+            let btn_str = std::ffi::CStr::from_ptr(btn_cstr).to_str().unwrap_or("");
+            if btn_str == title {
+                let _: () = msg_send![content_view, setAttributedTitle: attr_str];
+                return;
+            }
+        }
+    }
+}
+
 /// Create the system tray icon with context menu.
 pub fn create_tray(app: &App) -> Result<()> {
     let state = app.state::<Arc<AppState>>();
@@ -63,7 +195,7 @@ pub fn create_tray(app: &App) -> Result<()> {
         &quit_item,
     ])?;
 
-    TrayIconBuilder::new()
+    TrayIconBuilder::with_id("main")
         .icon(tauri::include_image!("icons/tray-icon@2x.png"))
         .icon_as_template(true)
         .menu(&menu)
@@ -77,6 +209,7 @@ pub fn create_tray(app: &App) -> Result<()> {
                 "clear_composition" => {
                     let state = app.state::<Arc<AppState>>();
                     state.composition.lock().clear();
+                    update_tray_segment_count(app, 0);
                     let _ = app.emit("composition-cleared", ());
                     log::info!("Composition buffer cleared via tray menu");
                 }

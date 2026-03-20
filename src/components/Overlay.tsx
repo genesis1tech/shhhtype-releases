@@ -1,9 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useRecordingState } from "../hooks/useTauriEvents";
-import { rewriteAndInject } from "../lib/commands";
-
-type OverlayMode = "idle" | "recording" | "transcribing" | "rewrite-prompt" | "rewriting" | "rewrite-done" | "rewrite-fallback";
+type OverlayMode = "idle" | "recording" | "transcribing" | "rewriting" | "rewrite-done" | "rewrite-fallback";
 
 /** Animated waveform bars driven by audio levels from the backend. */
 /** Map level (0–1) to a color: green → cyan → blue → purple → red */
@@ -61,8 +59,6 @@ function Waveform({ levels }: { levels: number[] }) {
 export default function Overlay() {
   const recordingState = useRecordingState();
   const [mode, setMode] = useState<OverlayMode>("idle");
-  const [segmentCount, setSegmentCount] = useState(0);
-  const [rewriteTimer, setRewriteTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [audioLevels, setAudioLevels] = useState<number[]>(new Array(24).fill(0));
   const levelsRef = useRef(audioLevels);
 
@@ -70,9 +66,10 @@ export default function Overlay() {
   useEffect(() => {
     if (recordingState === "recording") {
       setMode("recording");
-      if (rewriteTimer) clearTimeout(rewriteTimer);
     } else if (recordingState === "transcribing" && mode !== "rewriting") {
       setMode("transcribing");
+    } else if (recordingState === "idle" && mode !== "rewriting" && mode !== "rewrite-done" && mode !== "rewrite-fallback") {
+      setMode("idle");
     }
     // Reset levels when not recording
     if (recordingState !== "recording") {
@@ -91,20 +88,10 @@ export default function Overlay() {
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
-  // Listen for transcription complete — show rewrite prompt briefly
+  // Listen for rewrite events (triggered by hotkey only)
   useEffect(() => {
-    const unlistenComplete = listen<{ text: string; segment_count: number }>("transcription-complete", (event) => {
-      setSegmentCount(event.payload.segment_count);
-      setMode("rewrite-prompt");
-      const timer = setTimeout(() => {
-        setMode((m) => (m === "rewrite-prompt" ? "idle" : m));
-      }, 3000);
-      setRewriteTimer(timer);
-    });
-
     const unlistenRewriteStart = listen("rewrite-started", () => {
       setMode("rewriting");
-      if (rewriteTimer) clearTimeout(rewriteTimer);
     });
 
     const unlistenRewriteDone = listen("rewrite-complete", () => {
@@ -116,38 +103,18 @@ export default function Overlay() {
       setMode("idle");
     });
 
-    const unlistenCleared = listen("composition-cleared", () => {
-      setSegmentCount(0);
-    });
-
     const unlistenFallback = listen("rewrite-fallback", () => {
       setMode("rewrite-fallback");
       setTimeout(() => setMode("idle"), 2000);
     });
 
     return () => {
-      unlistenComplete.then((fn) => fn());
       unlistenRewriteStart.then((fn) => fn());
       unlistenRewriteDone.then((fn) => fn());
       unlistenRewriteError.then((fn) => fn());
-      unlistenCleared.then((fn) => fn());
       unlistenFallback.then((fn) => fn());
     };
   }, []);
-
-  const handleRewrite = async () => {
-    if (rewriteTimer) clearTimeout(rewriteTimer);
-    setMode("rewriting");
-    try {
-      await rewriteAndInject();
-      setMode("rewrite-done");
-      setTimeout(() => setMode("idle"), 1500);
-      setSegmentCount(0);
-    } catch (e) {
-      console.error("Rewrite failed:", e);
-      setMode("idle");
-    }
-  };
 
   if (mode === "idle") {
     return <div className="overlay-window h-screen" />;
@@ -168,22 +135,6 @@ export default function Overlay() {
           <>
             <span className="inline-block h-3 w-3 rounded-full bg-yellow-400 animate-pulse" />
             <span className="text-sm font-medium text-white">Transcribing...</span>
-          </>
-        )}
-
-        {mode === "rewrite-prompt" && (
-          <>
-            <span className="inline-block h-3 w-3 rounded-full bg-green-400" />
-            <span className="text-sm font-medium text-white">Done</span>
-            {segmentCount > 1 && (
-              <span className="text-xs font-medium text-white/70">{segmentCount} segments</span>
-            )}
-            <button
-              onClick={handleRewrite}
-              className="ml-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1 rounded-full transition-colors"
-            >
-              Rewrite?
-            </button>
           </>
         )}
 

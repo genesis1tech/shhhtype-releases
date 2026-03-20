@@ -173,6 +173,8 @@ pub fn register_hotkey(app: &tauri::AppHandle, shortcut_str: &str) {
                     }
                     let _ = app_handle.emit("recording-state-changed", "recording");
                     if config.show_overlay {
+                        // Bump generation so any pending hide timer from a previous cycle is invalidated
+                        state.overlay_generation.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         windows::show_overlay(app_handle);
                     }
                 }
@@ -226,6 +228,7 @@ pub fn register_hotkey(app: &tauri::AppHandle, shortcut_str: &str) {
                             }
 
                             let segment_count = state.composition.lock().len();
+                            tray::setup::update_tray_segment_count(&app, segment_count);
                             let _ = app.emit(
                                 "transcription-complete",
                                 commands::TranscriptionCompletePayload {
@@ -234,20 +237,6 @@ pub fn register_hotkey(app: &tauri::AppHandle, shortcut_str: &str) {
                                 },
                             );
 
-                            // If rewrite is enabled, keep overlay visible with
-                            // click-through disabled so user can click "Rewrite?"
-                            if config.rewrite_enabled && config.groq_api_key.is_some() {
-                                windows::enable_overlay_interaction(&app);
-                                let _ = app.emit("recording-state-changed", "idle");
-                                let app_for_hide = app.clone();
-                                std::thread::spawn(move || {
-                                    std::thread::sleep(std::time::Duration::from_secs(3));
-                                    windows::disable_overlay_interaction(&app_for_hide);
-                                    windows::hide_overlay(&app_for_hide);
-                                });
-                                // Skip the normal hide below
-                                return;
-                            }
                         }
                         Err(e) => log::error!("Transcription failed: {}", e),
                         _ => {}
@@ -296,6 +285,8 @@ pub fn register_rewrite_hotkey(app: &tauri::AppHandle, shortcut_str: &str) {
             log::info!("Rewrite hotkey pressed, rewriting last transcription");
             let app = app_handle.clone();
             let state = Arc::clone(state.inner());
+            // Bump generation to invalidate any pending 3s hide timer from recording
+            state.overlay_generation.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             std::thread::spawn(move || {
                 let _ = app.emit("recording-state-changed", "transcribing");
                 windows::show_overlay(&app);
@@ -337,6 +328,7 @@ pub fn register_rewrite_hotkey(app: &tauri::AppHandle, shortcut_str: &str) {
                         // Clear composition buffer and last_transcription to prevent re-rewriting
                         state.composition.lock().clear();
                         *state.last_transcription.lock() = None;
+                        tray::setup::update_tray_segment_count(&app, 0);
                         let _ = app.emit("rewrite-complete", &rewritten);
                     }
                     Err(e) => {

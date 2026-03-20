@@ -142,6 +142,9 @@ pub struct AppState {
     pub composition: Mutex<CompositionBuffer>,
     /// Cached dictionary to avoid disk I/O on every transcription.
     pub dictionary_cache: Mutex<Option<crate::transcribe::dictionary::Dictionary>>,
+    /// Generation counter for overlay visibility — stale hide timers check this
+    /// to avoid hiding the overlay when a new action (recording, rewrite) has started.
+    pub overlay_generation: AtomicU32,
 }
 
 impl AppState {
@@ -169,6 +172,7 @@ impl AppState {
             groq_usage: Mutex::new(GroqUsage::default()),
             composition: Mutex::new(CompositionBuffer::new()),
             dictionary_cache: Mutex::new(None),
+            overlay_generation: AtomicU32::new(0),
         }
     }
 
