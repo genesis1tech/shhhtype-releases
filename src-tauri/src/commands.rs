@@ -55,13 +55,16 @@ pub fn do_start_recording(state: &Arc<AppState>, app: Option<AppHandle>) -> Resu
             return;
         }
 
-        sample_rate_out.store(capture.sample_rate(), Ordering::Relaxed);
+        let sr = capture.sample_rate();
+        sample_rate_out.store(sr, Ordering::Relaxed);
         log::info!("Audio capture thread running at {}Hz, silence timeout: {}s ({} frames)",
-            capture.sample_rate(), config.vad_silence_timeout, vad_silence_frames);
+            sr, config.vad_silence_timeout, vad_silence_frames);
 
         let mut vad = EnergyVad::new(vad_threshold, vad_silence_frames);
         let mut has_speech = false;
         const WAVEFORM_BARS: usize = 24;
+        // Scale VAD chunk size to actual sample rate (~50ms of audio)
+        let vad_chunk_size = (sr as usize / 20).max(800); // sr/20 = 50ms worth of samples
 
         while !stop_flag.load(Ordering::Relaxed) {
             std::thread::sleep(std::time::Duration::from_millis(50));
@@ -70,9 +73,9 @@ pub fn do_start_recording(state: &Arc<AppState>, app: Option<AppHandle>) -> Resu
             let levels: Option<Vec<f32>> = {
                 let buf = buffer.lock();
                 let len = buf.len();
-                if len > 800 {
-                    // Check last ~50ms of audio
-                    let chunk_start = len.saturating_sub(800);
+                if len > vad_chunk_size {
+                    // Check last ~50ms of audio (scaled to actual sample rate)
+                    let chunk_start = len.saturating_sub(vad_chunk_size);
                     let chunk = &buf[chunk_start..len];
                     let is_speech = vad.is_speech(chunk);
                     if is_speech {
@@ -85,7 +88,7 @@ pub fn do_start_recording(state: &Arc<AppState>, app: Option<AppHandle>) -> Resu
 
                     // Compute waveform levels while we hold the lock
                     if app.is_some() {
-                        let wave_start = len.saturating_sub(3200);
+                        let wave_start = len.saturating_sub(vad_chunk_size * 4);
                         let wave_chunk = &buf[wave_start..len];
                         let bar_size = wave_chunk.len() / WAVEFORM_BARS;
                         Some((0..WAVEFORM_BARS)
@@ -156,20 +159,26 @@ pub fn do_stop_and_transcribe(state: &Arc<AppState>) -> Result<String, String> {
         raw_samples.len() as f32 / sample_rate as f32
     );
 
-    // Check if the recording contains any speech by measuring RMS energy.
-    // Whisper hallucinates phrases like "Thank you" when fed silence.
-    let rms = crate::vad::energy::EnergyVad::rms(&raw_samples);
+    // Check if the recording contains any speech by finding the peak RMS
+    // across 50ms windows. Using overall RMS can miss speech in recordings
+    // with long silent sections (the average gets diluted).
+    // Whisper hallucinates phrases like "Thank you" when fed pure silence.
     let silence_floor = 0.002;
-    if rms < silence_floor {
+    let window_size = (sample_rate as usize / 20).max(800); // ~50ms
+    let peak_rms = raw_samples
+        .chunks(window_size)
+        .map(|chunk| crate::vad::energy::EnergyVad::rms(chunk))
+        .fold(0.0f32, f32::max);
+    if peak_rms < silence_floor {
         log::info!(
-            "Audio RMS ({:.6}) below silence floor ({:.6}), skipping transcription (silence only)",
-            rms,
+            "Peak audio RMS ({:.6}) below silence floor ({:.6}), skipping transcription (silence only)",
+            peak_rms,
             silence_floor
         );
         state.set_state(STATE_IDLE);
         return Ok(String::new());
     }
-    log::info!("Audio RMS: {:.6} (silence floor: {:.6})", rms, silence_floor);
+    log::info!("Peak audio RMS: {:.6} (silence floor: {:.6})", peak_rms, silence_floor);
 
     let config = state.config.read().clone();
     let transcribed_text = match config.transcription_backend {

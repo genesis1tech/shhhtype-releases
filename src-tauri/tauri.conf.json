@@ -28,7 +28,7 @@
     ],
     "macOS": {
       "entitlements": "Entitlements.plist",
-      "signingIdentity": "ShhhType Dev",
+      "signingIdentity": "Developer ID Application: Marcus Wade (5LP8Z79Z8W)",
       "dmg": {
         "background": "icons/dmg-background.png",
         "windowSize": { "width": 660, "height": 400 },
