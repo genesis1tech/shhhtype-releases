@@ -11,6 +11,10 @@ Voice-to-text tool for developers and professionals. Press a hotkey, speak, and 
 
 Or browse all releases on the [Releases](https://github.com/genesis1tech/shhhtype-releases/releases) page.
 
+## Pricing
+
+ShhhType is a paid application. Visit [shhhtype.com](https://shhhtype.com) for pricing and licensing details.
+
 ## Features
 
 - **Global hotkey** — record from any app with push-to-talk or toggle mode
