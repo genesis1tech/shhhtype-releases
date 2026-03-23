@@ -6,7 +6,7 @@ Voice-to-text tool for developers and professionals. Press a hotkey, speak, and 
 
 | Platform | Version | Download |
 |----------|---------|----------|
-| **macOS** (Apple Silicon) | v0.1.3-beta | [ShhhType_0.1.3_aarch64.dmg](https://github.com/genesis1tech/shhhtype-releases/releases/download/v0.1.3-beta/ShhhType_0.1.3_aarch64.dmg) |
+| **macOS** (Apple Silicon) | v0.1.4 | [ShhhType_0.1.4_aarch64.dmg](https://github.com/genesis1tech/shhhtype-releases/releases/download/v0.1.4-mac/ShhhType_0.1.4_aarch64.dmg) |
 | **Windows** (x64) | v0.1.4 | [ShhhType_0.1.4_x64-setup.exe](https://github.com/genesis1tech/shhhtype-releases/releases/download/v0.1.4-win/ShhhType_0.1.4_x64-setup.exe) |
 
 Or browse all releases on the [Releases](https://github.com/genesis1tech/shhhtype-releases/releases) page.
