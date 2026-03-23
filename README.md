@@ -1,24 +1,39 @@
 # ShhhType
 
-macOS menu bar voice-to-text tool for developers and professionals. Global hotkey captures speech and injects transcribed text into any focused application.
+Voice-to-text tool for developers and professionals. Press a hotkey, speak, and your words are transcribed and injected into any focused application — IDEs, terminals, browsers, Slack, email, anything.
 
 ## Download
 
-Download the latest `.dmg` from the [Releases](https://github.com/genesis1tech/shhhtype-releases/releases) page.
+| Platform | Version | Download |
+|----------|---------|----------|
+| **macOS** (Apple Silicon) | v0.1.3-beta | [ShhhType_0.1.3_aarch64.dmg](https://github.com/genesis1tech/shhhtype-releases/releases/download/v0.1.3-beta/ShhhType_0.1.3_aarch64.dmg) |
+| **Windows** (x64) | v0.1.4 | [ShhhType_0.1.4_x64-setup.exe](https://github.com/genesis1tech/shhhtype-releases/releases/download/v0.1.4-win/ShhhType_0.1.4_x64-setup.exe) |
+
+Or browse all releases on the [Releases](https://github.com/genesis1tech/shhhtype-releases/releases) page.
 
 ## Features
 
 - **Global hotkey** — record from any app with push-to-talk or toggle mode
-- **Dual transcription** — local Whisper (Metal GPU) or Groq cloud
+- **Dual transcription** — local Whisper (Metal GPU on macOS) or Groq cloud (whisper-large-v3-turbo)
 - **Voice-triggered skills** — speak `/linkedin skill` or `/grant skill` to activate specialized AI rewrite prompts
+- **AI rewrite** — polish transcriptions with configurable styles (Professional, Casual, Concise, Friendly) or custom skills
 - **Text injection** — pastes transcribed text directly into your focused app
-- **AI rewrite** — polish transcriptions with configurable styles or custom skills
+- **Composition buffer** — accumulates multiple recordings so rewrites can span across sessions
+- **Voice Activity Detection** — auto-stops recording after configurable silence timeout
+- **Custom dictionary** — correct terms the transcriber frequently gets wrong
+- **Searchable history** with export to JSON
+- **9 languages** + auto-detect
 
-## Requirements
+## System Requirements
 
-- macOS 11+ (Apple Silicon)
+### macOS
+- macOS 11+ (Apple Silicon recommended)
 - Microphone permission
 - Accessibility permission (for text injection)
+
+### Windows
+- Windows 10/11 (x64)
+- Microphone permission
 
 ## Links
 
