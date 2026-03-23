@@ -2,6 +2,11 @@
 
 ## Recent Changes
 
+### minor: add overlay position option — top center vs inline at cursor - 2026-03-23
+- Branch: `minor/inline-overlay-position`
+- PR: https://github.com/genesis1tech/vox2txt/pull/45
+- Summary: OverlayPosition enum (TopCenter default, Inline) with cursor-tracking positioning. Overlay centers on mouse cursor above it with edge clamping. TopCenter now repositions to cursor's screen (multi-monitor fix). Feedback settings moved from Audio to General tab.
+
 ### minor: add voice-triggered rewrite skills with LinkedIn skill - 2026-03-20
 - Branch: `minor/skill-loader`
 - PR: https://github.com/genesis1tech/vox2txt/pull/36

@@ -1,6 +1,6 @@
 [package]
 name = "shhhtype"
-version = "0.1.4"
+version = "0.1.5"
 description = "Voice-to-text developer tool for macOS"
 authors = ["g1tech"]
 edition = "2021"
