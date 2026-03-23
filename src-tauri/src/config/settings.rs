@@ -48,6 +48,9 @@ pub struct Settings {
     /// Selected audio input device name. None = system default.
     #[serde(default)]
     pub audio_input_device: Option<String>,
+    /// Where to show the recording overlay.
+    #[serde(default)]
+    pub overlay_position: OverlayPosition,
 }
 
 fn default_vad_silence_timeout() -> f32 {
@@ -85,6 +88,14 @@ pub enum InjectionMethod {
     Keyboard,
 }
 
+/// Where to show the recording overlay.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Default)]
+pub enum OverlayPosition {
+    #[default]
+    TopCenter,
+    Inline,
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -105,6 +116,7 @@ impl Default for Settings {
             rewrite_style: RewriteStyle::Professional,
             rewrite_hotkey: default_rewrite_hotkey(),
             audio_input_device: None,
+            overlay_position: OverlayPosition::TopCenter,
         }
     }
 }

@@ -31,6 +31,7 @@ import type {
   LicenseStatus,
   GroqUsage,
   UpdateInfo,
+  OverlayPosition,
 } from "../lib/types";
 import History from "./History";
 
@@ -717,6 +718,55 @@ function GeneralTab({
           />
         </SettingsRow>
       </SettingsGroup>
+
+      {/* FEEDBACK */}
+      <SettingsGroup title="Feedback">
+        <SettingsRow
+          label="Show overlay"
+          description="Display floating overlay during recording"
+        >
+          <input
+            type="checkbox"
+            className="apple-toggle"
+            checked={settings.show_overlay}
+            onChange={(e) =>
+              save({ ...settings, show_overlay: e.target.checked })
+            }
+          />
+        </SettingsRow>
+        <SettingsRow
+          label="Overlay position"
+          description="Where to show the recording overlay"
+        >
+          <select
+            className="apple-select"
+            value={settings.overlay_position ?? "TopCenter"}
+            disabled={!settings.show_overlay}
+            onChange={(e) =>
+              save({
+                ...settings,
+                overlay_position: e.target.value as OverlayPosition,
+              })
+            }
+          >
+            <option value="TopCenter">Top center</option>
+            <option value="Inline">At cursor</option>
+          </select>
+        </SettingsRow>
+        <SettingsRow
+          label="Sound feedback"
+          description="Play sound on start/stop"
+        >
+          <input
+            type="checkbox"
+            className="apple-toggle"
+            checked={settings.sound_feedback}
+            onChange={(e) =>
+              save({ ...settings, sound_feedback: e.target.checked })
+            }
+          />
+        </SettingsRow>
+      </SettingsGroup>
     </>
   );
 }
@@ -805,35 +855,6 @@ function AudioTab({
               })
             }
             className="w-32 accent-[#007AFF]"
-          />
-        </SettingsRow>
-      </SettingsGroup>
-
-      <SettingsGroup title="Feedback">
-        <SettingsRow
-          label="Show overlay"
-          description="Display floating overlay during recording"
-        >
-          <input
-            type="checkbox"
-            className="apple-toggle"
-            checked={settings.show_overlay}
-            onChange={(e) =>
-              save({ ...settings, show_overlay: e.target.checked })
-            }
-          />
-        </SettingsRow>
-        <SettingsRow
-          label="Sound feedback"
-          description="Play sound on start/stop"
-        >
-          <input
-            type="checkbox"
-            className="apple-toggle"
-            checked={settings.sound_feedback}
-            onChange={(e) =>
-              save({ ...settings, sound_feedback: e.target.checked })
-            }
           />
         </SettingsRow>
       </SettingsGroup>

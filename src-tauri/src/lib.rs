@@ -137,7 +137,7 @@ pub fn run() {
                 std::thread::spawn(move || {
                     // Short delay to let the webview finish loading
                     std::thread::sleep(std::time::Duration::from_millis(500));
-                    windows::show_overlay(&app_for_warmup);
+                    windows::show_overlay(&app_for_warmup, false);
                     std::thread::sleep(std::time::Duration::from_millis(100));
                     windows::hide_overlay(&app_for_warmup);
                     log::info!("Overlay warmup complete");
@@ -238,7 +238,8 @@ pub fn register_hotkey(app: &tauri::AppHandle, shortcut_str: &str) {
                     if config.show_overlay {
                         // Bump generation so any pending hide timer from a previous cycle is invalidated
                         state.overlay_generation.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                        windows::show_overlay(app_handle);
+                        let inline = config.overlay_position == crate::config::settings::OverlayPosition::Inline;
+                        windows::show_overlay(app_handle, inline);
                     }
                 }
             }
@@ -350,11 +351,12 @@ pub fn register_rewrite_hotkey(app: &tauri::AppHandle, shortcut_str: &str) {
             log::info!("Rewrite hotkey pressed, rewriting last transcription");
             let app = app_handle.clone();
             let state = Arc::clone(state.inner());
+            let inline = config.overlay_position == crate::config::settings::OverlayPosition::Inline;
             // Bump generation to invalidate any pending 3s hide timer from recording
             state.overlay_generation.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             std::thread::spawn(move || {
                 let _ = app.emit("recording-state-changed", "transcribing");
-                windows::show_overlay(&app);
+                windows::show_overlay(&app, inline);
                 let _ = app.emit("rewrite-started", ());
 
                 // Read from composition buffer; fall back to last_transcription

@@ -257,8 +257,10 @@ pub fn start_recording(
 ) -> Result<(), String> {
     do_start_recording(state.inner(), Some(app.clone()))?;
     let _ = app.emit("recording-state-changed", "recording");
-    if state.config.read().show_overlay {
-        crate::windows::show_overlay(&app);
+    let config = state.config.read();
+    if config.show_overlay {
+        let inline = config.overlay_position == crate::config::settings::OverlayPosition::Inline;
+        crate::windows::show_overlay(&app, inline);
     }
     Ok(())
 }

@@ -103,19 +103,95 @@ pub unsafe fn apply_transparent_titlebar(ns_window: cocoa::base::id) {
     let _: () = msg_send![ns_window, setTitleVisibility: 1_i64];
 }
 
+/// Compute the overlay origin positioned near the mouse cursor.
+///
+/// Centers the overlay horizontally on the cursor and places it above the cursor
+/// with a 20px gap. Falls back to below cursor if near the top of the screen.
+/// Clamps to the visible frame of the screen containing the cursor.
+#[cfg(target_os = "macos")]
+unsafe fn cursor_overlay_origin(width: f64, height: f64) -> (f64, f64) {
+    use cocoa::appkit::{NSEvent, NSScreen};
+    use cocoa::foundation::{NSArray, NSPoint, NSRect};
+    use objc::{msg_send, sel, sel_impl};
+
+    // mouseLocation returns Cocoa coords (Y=0 at bottom of primary screen)
+    let cursor: NSPoint = NSEvent::mouseLocation(cocoa::base::nil);
+    let screens: cocoa::base::id = NSScreen::screens(cocoa::base::nil);
+    let count = screens.count();
+    let gap = 20.0;
+
+    // Find the screen containing the cursor
+    let mut visible: NSRect = cocoa::foundation::NSRect::new(
+        cocoa::foundation::NSPoint::new(0.0, 0.0),
+        cocoa::foundation::NSSize::new(1920.0, 1080.0),
+    );
+    for i in 0..count {
+        let screen: cocoa::base::id = msg_send![screens, objectAtIndex: i];
+        let frame: NSRect = msg_send![screen, frame];
+        if cursor.x >= frame.origin.x
+            && cursor.x < frame.origin.x + frame.size.width
+            && cursor.y >= frame.origin.y
+            && cursor.y < frame.origin.y + frame.size.height
+        {
+            visible = msg_send![screen, visibleFrame];
+            break;
+        }
+    }
+
+    // Center horizontally on cursor
+    let mut x = cursor.x - width / 2.0;
+    // Place above cursor (Cocoa Y grows upward)
+    let mut y = cursor.y + gap;
+
+    // If too close to top, place below cursor instead
+    if y + height > visible.origin.y + visible.size.height {
+        y = cursor.y - height - gap;
+    }
+
+    // Clamp to visible frame
+    if x < visible.origin.x {
+        x = visible.origin.x;
+    }
+    if x + width > visible.origin.x + visible.size.width {
+        x = visible.origin.x + visible.size.width - width;
+    }
+    if y < visible.origin.y {
+        y = visible.origin.y;
+    }
+    if y + height > visible.origin.y + visible.size.height {
+        y = visible.origin.y + visible.size.height - height;
+    }
+
+    (x, y)
+}
+
+/// Context passed through GCD dispatch for show_overlay.
+#[cfg(target_os = "macos")]
+struct OverlayShowCtx {
+    ns_ptr: usize,
+    inline_pos: bool,
+}
+
 /// Show the overlay window and ensure it stays above all other windows.
+///
+/// When `inline` is true, positions the overlay near the mouse cursor.
+/// Otherwise, positions at top-center of the cursor's current screen.
 ///
 /// Re-applies the macOS window level and forces the window to the front on
 /// every show because macOS may reset window ordering after hide/show cycles.
 /// Uses GCD dispatch to main thread because AppKit window operations must
 /// happen on the main thread, but this function may be called from background
 /// threads (e.g. hotkey handler, rewrite handler).
-pub fn show_overlay(app: &AppHandle) {
+pub fn show_overlay(app: &AppHandle, inline: bool) {
     if let Some(w) = app.get_webview_window("overlay") {
         #[cfg(target_os = "macos")]
         {
             if let Ok(ns_ptr) = w.ns_window() {
-                let ns_ptr_val = ns_ptr as usize;
+                let ctx = Box::new(OverlayShowCtx {
+                    ns_ptr: ns_ptr as usize,
+                    inline_pos: inline,
+                });
+                let ctx_ptr = Box::into_raw(ctx) as *mut std::ffi::c_void;
                 // Dispatch window ordering to main thread (AppKit requirement).
                 // Use orderFrontRegardless + setLevel_ directly instead of Tauri's
                 // show() which calls makeKeyAndOrderFront: and steals focus from the
@@ -123,9 +199,65 @@ pub fn show_overlay(app: &AppHandle) {
                 extern "C" fn show_without_focus(ctx: *mut std::ffi::c_void) {
                     unsafe {
                         use cocoa::appkit::NSWindow;
+                        use cocoa::foundation::NSPoint;
                         use objc::runtime::Class;
                         use objc::{msg_send, sel, sel_impl};
-                        let ns_window = ctx as cocoa::base::id;
+                        let overlay_ctx = Box::from_raw(ctx as *mut OverlayShowCtx);
+                        let ns_window = overlay_ctx.ns_ptr as cocoa::base::id;
+
+                        if overlay_ctx.inline_pos {
+                            let frame: cocoa::foundation::NSRect =
+                                msg_send![ns_window, frame];
+                            let (x, y) = cursor_overlay_origin(
+                                frame.size.width,
+                                frame.size.height,
+                            );
+                            let origin = NSPoint::new(x, y);
+                            let _: () = msg_send![ns_window, setFrameOrigin: origin];
+                        } else {
+                            // Top-center of the screen containing the cursor
+                            use cocoa::appkit::{NSEvent, NSScreen};
+                            use cocoa::foundation::NSArray;
+
+                            let cursor: cocoa::foundation::NSPoint =
+                                NSEvent::mouseLocation(cocoa::base::nil);
+                            let screens: cocoa::base::id =
+                                NSScreen::screens(cocoa::base::nil);
+                            let count = screens.count();
+                            let first_screen: cocoa::base::id =
+                                msg_send![screens, objectAtIndex: 0u64];
+                            let mut screen_frame: cocoa::foundation::NSRect =
+                                msg_send![first_screen, visibleFrame];
+                            for i in 0..count {
+                                let screen: cocoa::base::id =
+                                    msg_send![screens, objectAtIndex: i];
+                                let frame: cocoa::foundation::NSRect =
+                                    msg_send![screen, frame];
+                                if cursor.x >= frame.origin.x
+                                    && cursor.x
+                                        < frame.origin.x + frame.size.width
+                                    && cursor.y >= frame.origin.y
+                                    && cursor.y
+                                        < frame.origin.y + frame.size.height
+                                {
+                                    screen_frame = msg_send![screen, visibleFrame];
+                                    break;
+                                }
+                            }
+                            let win_frame: cocoa::foundation::NSRect =
+                                msg_send![ns_window, frame];
+                            let x = screen_frame.origin.x
+                                + (screen_frame.size.width - win_frame.size.width)
+                                    / 2.0;
+                            // Top of visible frame (Cocoa Y grows upward)
+                            let y = screen_frame.origin.y
+                                + screen_frame.size.height
+                                - win_frame.size.height
+                                - 20.0;
+                            let origin = NSPoint::new(x, y);
+                            let _: () = msg_send![ns_window, setFrameOrigin: origin];
+                        }
+
                         ns_window.setLevel_(OVERLAY_WINDOW_LEVEL);
                         // setIsVisible shows the window without making it key
                         let _: () = msg_send![ns_window, setIsVisible: true];
@@ -150,7 +282,7 @@ pub fn show_overlay(app: &AppHandle) {
                     }
                     dispatch_async_f(
                         std::ptr::addr_of!(_dispatch_main_q),
-                        ns_ptr_val as *mut std::ffi::c_void,
+                        ctx_ptr,
                         show_without_focus,
                     );
                 }

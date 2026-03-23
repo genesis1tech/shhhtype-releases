@@ -7,6 +7,9 @@ export type TranscriptionBackend = "Local" | "Cloud";
 /** AI rewrite style */
 export type RewriteStyle = "Professional" | "Casual" | "Concise" | "Friendly";
 
+/** Overlay position */
+export type OverlayPosition = "TopCenter" | "Inline";
+
 
 /** License status */
 export type LicenseStatus = "Free" | "Licensed" | "Invalid";
@@ -30,6 +33,7 @@ export interface Settings {
   rewrite_style: RewriteStyle;
   rewrite_hotkey: string;
   audio_input_device: string | null;
+  overlay_position: OverlayPosition;
 }
 
 /** Audio input device info */
