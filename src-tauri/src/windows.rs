@@ -112,25 +112,35 @@ pub unsafe fn apply_transparent_titlebar(ns_window: cocoa::base::id) {
 /// threads (e.g. hotkey handler, rewrite handler).
 pub fn show_overlay(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("overlay") {
-        let _ = w.show();
-
         #[cfg(target_os = "macos")]
         {
             if let Ok(ns_ptr) = w.ns_window() {
                 let ns_ptr_val = ns_ptr as usize;
                 // Dispatch window ordering to main thread (AppKit requirement).
-                extern "C" fn set_level_and_order(ctx: *mut std::ffi::c_void) {
+                // Use orderFrontRegardless + setLevel_ directly instead of Tauri's
+                // show() which calls makeKeyAndOrderFront: and steals focus from the
+                // user's active app — especially on first show after launch.
+                extern "C" fn show_without_focus(ctx: *mut std::ffi::c_void) {
                     unsafe {
                         use cocoa::appkit::NSWindow;
+                        use objc::runtime::Class;
+                        use objc::{msg_send, sel, sel_impl};
                         let ns_window = ctx as cocoa::base::id;
                         ns_window.setLevel_(OVERLAY_WINDOW_LEVEL);
+                        // setIsVisible shows the window without making it key
+                        let _: () = msg_send![ns_window, setIsVisible: true];
+                        // orderFrontRegardless brings it to front without activating
                         ns_window.orderFrontRegardless();
+                        // Force-deactivate our app so the previously focused app stays active
+                        let ns_app: cocoa::base::id = msg_send![
+                            Class::get("NSApplication").unwrap(),
+                            sharedApplication
+                        ];
+                        let _: () = msg_send![ns_app, deactivate];
                     }
                 }
                 unsafe {
                     extern "C" {
-                        // _dispatch_main_q is the global main queue object.
-                        // dispatch_get_main_queue() is a C macro = &_dispatch_main_q.
                         static _dispatch_main_q: u8;
                         fn dispatch_async_f(
                             queue: *const u8,
@@ -141,10 +151,15 @@ pub fn show_overlay(app: &AppHandle) {
                     dispatch_async_f(
                         std::ptr::addr_of!(_dispatch_main_q),
                         ns_ptr_val as *mut std::ffi::c_void,
-                        set_level_and_order,
+                        show_without_focus,
                     );
                 }
             }
+        }
+
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = w.show();
         }
     }
 }

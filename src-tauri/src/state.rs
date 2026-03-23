@@ -42,7 +42,7 @@ pub fn update_groq_usage(
 }
 
 /// Composition buffer TTL in seconds (30 minutes).
-const BUFFER_TTL_SECS: u64 = 1800;
+const BUFFER_TTL_SECS: u64 = 600;
 /// Maximum entries in the composition buffer.
 const BUFFER_MAX_ENTRIES: usize = 20;
 
@@ -113,6 +113,14 @@ impl CompositionBuffer {
     /// True when there are 2+ segments in the buffer.
     pub fn is_multi(&self) -> bool {
         self.entries.len() > 1
+    }
+
+    /// True when the buffer has entries and TTL has expired since last append.
+    pub fn is_expired(&self) -> bool {
+        !self.entries.is_empty()
+            && self
+                .last_appended_at
+                .map_or(false, |t| t.elapsed().as_secs() >= BUFFER_TTL_SECS)
     }
 }
 

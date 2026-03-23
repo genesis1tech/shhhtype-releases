@@ -127,6 +127,23 @@ pub fn run() {
                 ));
             }
 
+            // Warm up the overlay webview by briefly showing and hiding it.
+            // On macOS, the first show of a webview window can activate the app
+            // and steal focus from the user's target app. By doing this warmup
+            // during startup, the overlay is fully initialized before the user
+            // ever records, preventing focus theft on first use.
+            {
+                let app_for_warmup = app.handle().clone();
+                std::thread::spawn(move || {
+                    // Short delay to let the webview finish loading
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                    windows::show_overlay(&app_for_warmup);
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    windows::hide_overlay(&app_for_warmup);
+                    log::info!("Overlay warmup complete");
+                });
+            }
+
             // Register global hotkey for recording
             let shortcut_str = state.config.read().shortcut.clone();
             register_hotkey(&app.handle().clone(), &shortcut_str);
@@ -141,6 +158,24 @@ pub fn run() {
                 windows::show_welcome(app.handle());
                 // Mark onboarding as shown (user can still go through it)
                 let _ = std::fs::write(&onboarding_flag, "1");
+            }
+
+            // Background timer: auto-clear composition buffer after TTL (10 min)
+            {
+                let app_for_ttl = app.handle().clone();
+                std::thread::spawn(move || {
+                    loop {
+                        std::thread::sleep(std::time::Duration::from_secs(60));
+                        let state = app_for_ttl.state::<Arc<AppState>>();
+                        let expired = state.composition.lock().is_expired();
+                        if expired {
+                            state.composition.lock().clear();
+                            *state.last_transcription.lock() = None;
+                            tray::setup::update_tray_segment_count(&app_for_ttl, 0);
+                            log::info!("Composition buffer auto-cleared (TTL expired)");
+                        }
+                    }
+                });
             }
 
             // Check for updates in the background after a short delay
@@ -256,7 +291,9 @@ pub fn register_hotkey(app: &tauri::AppHandle, shortcut_str: &str) {
                             }
 
                             let segment_count = state.composition.lock().len();
-                            tray::setup::update_tray_segment_count(&app, segment_count);
+                            if config.rewrite_enabled {
+                                tray::setup::update_tray_segment_count(&app, segment_count);
+                            }
                             let _ = app.emit(
                                 "transcription-complete",
                                 commands::TranscriptionCompletePayload {

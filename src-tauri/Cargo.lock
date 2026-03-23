@@ -4445,7 +4445,7 @@ dependencies = [
 
 [[package]]
 name = "shhhtype"
-version = "0.1.2"
+version = "0.1.4"
 dependencies = [
  "anyhow",
  "arboard",

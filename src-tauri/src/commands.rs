@@ -317,8 +317,14 @@ pub fn update_settings(
     let old = state.config.read().clone();
     let hotkey_changed = old.shortcut != settings.shortcut || old.rewrite_hotkey != settings.rewrite_hotkey;
 
+    let rewrite_was_enabled = old.rewrite_enabled;
     settings.save(&state.data_dir).map_err(|e| e.to_string())?;
-    *state.config.write() = settings;
+    *state.config.write() = settings.clone();
+
+    // Clear tray segment count when rewrite is toggled off
+    if rewrite_was_enabled && !settings.rewrite_enabled {
+        crate::tray::setup::update_tray_segment_count(&app, 0);
+    }
 
     // Global hotkeys are registered once at startup via the OS Carbon API.
     // The tauri-plugin-global-shortcut plugin cannot reliably re-register
@@ -574,8 +580,9 @@ pub fn rewrite_last_transcription(
     let rewritten = crate::rewrite::rewrite_text(&rewrite_input, &rewrite_style, api_key, Some(&state.groq_usage), custom_prompt.as_deref())
         .map_err(|e| format!("Rewrite failed: {}", e))?;
 
-    // Clear composition buffer after successful rewrite
+    // Clear both buffers after successful rewrite
     state.composition.lock().clear();
+    *state.last_transcription.lock() = None;
 
     log::info!("Rewrite complete: {}", rewritten);
     Ok(RewriteResult { text: rewritten, is_multi })
