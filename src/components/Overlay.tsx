@@ -127,7 +127,6 @@ export default function Overlay() {
           <>
             <span className="inline-block h-3 w-3 rounded-full bg-red-500 animate-pulse" />
             <Waveform levels={audioLevels} />
-            <span className="text-sm font-medium text-white">Listening...</span>
           </>
         )}
 
