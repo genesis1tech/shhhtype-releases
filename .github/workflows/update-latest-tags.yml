@@ -1,0 +1,71 @@
+name: Update latest platform tags
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  update-latest-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine platform from release tag
+        id: platform
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          if [[ "$TAG" == *"-mac"* ]]; then
+            echo "platform=mac" >> $GITHUB_OUTPUT
+            echo "latest_tag=latest-mac" >> $GITHUB_OUTPUT
+          elif [[ "$TAG" == *"-win"* ]]; then
+            echo "platform=win" >> $GITHUB_OUTPUT
+            echo "latest_tag=latest-win" >> $GITHUB_OUTPUT
+          else
+            echo "platform=unknown" >> $GITHUB_OUTPUT
+            echo "No platform suffix found in tag: $TAG"
+          fi
+
+      - name: Update latest platform release
+        if: steps.platform.outputs.platform != 'unknown'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PLATFORM="${{ steps.platform.outputs.platform }}"
+          LATEST_TAG="${{ steps.platform.outputs.latest_tag }}"
+          SOURCE_TAG="${{ github.event.release.tag_name }}"
+          RELEASE_NAME="${{ github.event.release.name }}"
+
+          echo "Updating $LATEST_TAG from $SOURCE_TAG"
+
+          # Download all assets from the source release
+          mkdir -p /tmp/assets
+          gh release download "$SOURCE_TAG" --dir /tmp/assets --repo "${{ github.repository }}"
+
+          # Delete existing latest-platform release if it exists
+          gh release delete "$LATEST_TAG" --yes --repo "${{ github.repository }}" 2>/dev/null || true
+
+          # Delete existing tag
+          git push origin ":refs/tags/$LATEST_TAG" 2>/dev/null || true
+
+          # Create new tag pointing to same commit
+          git tag "$LATEST_TAG"
+          git push origin "$LATEST_TAG"
+
+          # Create new release with copied assets
+          PLATFORM_LABEL="macOS"
+          if [ "$PLATFORM" = "win" ]; then
+            PLATFORM_LABEL="Windows"
+          fi
+
+          gh release create "$LATEST_TAG" \
+            /tmp/assets/* \
+            --title "ShhhType Latest ($PLATFORM_LABEL)" \
+            --notes "Latest $PLATFORM_LABEL release. Originally published as $SOURCE_TAG.
+
+This release is automatically updated when a new $PLATFORM_LABEL version is published." \
+            --repo "${{ github.repository }}"
+
+          echo "✅ Updated $LATEST_TAG with assets from $SOURCE_TAG"
