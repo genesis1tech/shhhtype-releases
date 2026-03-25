@@ -1,8 +1,27 @@
 # ShhhType
 
-A free, open-source macOS menu bar voice-to-text tool for developers. Press a hotkey, speak, and your words are transcribed and injected into the focused application — IDEs, terminals, browsers, anything.
+A voice-to-text desktop app that turns your speech into polished, publish-ready content. Press a hotkey, speak, and ShhhType transcribes your words and rewrites them using AI — LinkedIn posts, DMs, connection notes, and more. Works on macOS and Windows.
 
-Built because I got tired of paying for WhisperFlow. ShhhType gives you the same (better) experience with two transcription options:
+**The killer feature:** Voice-triggered skills. Say "slash linkedin" and your spoken thoughts become a formatted LinkedIn post with bold text, spacing, and hashtags. Say "slash dm" and get a personalized direct message. Say "slash connect" and get a connection request note under LinkedIn's 200-character limit.
+
+Built for LinkedIn content creators, founders, and professionals who have ideas but hate typing them out.
+
+## Voice Skills
+
+ShhhType's skill system transforms raw speech into polished content for specific use cases. Say the trigger command at the start or end of your recording.
+
+| Skill | Trigger | What It Does |
+|-------|---------|-------------|
+| **LinkedIn Post** | `/linkedin` or `/social` | Polished post with bold/italic Unicode formatting, HVCTA structure, hashtags |
+| **LinkedIn DM** | `/dm` | Personalized direct message (6 types: cold, warm, congrats, collab, follow-up, referral). Under 300 chars with anti-spam guardrails |
+| **Connection Note** | `/connect` | Connection request note under LinkedIn's 200-character limit |
+| **Hormozi Style** | `/hormozi` | Content in Alex Hormozi's punchy, framework-driven voice |
+
+Skills are triggered by voice — say "slash linkedin" or type `/linkedin` at the start or end of your recording. View all skills in Settings > Skills tab.
+
+## Transcription
+
+Two transcription backends:
 
 - **Local mode** — fully on-device via whisper.cpp with Metal GPU acceleration. No cloud APIs, no data leaves your machine.
 - **Cloud mode** — optional [Groq](https://groq.com/) backend using whisper-large-v3-turbo for faster transcription. Requires a free Groq API key.
@@ -12,19 +31,21 @@ Built because I got tired of paying for WhisperFlow. ShhhType gives you the same
 - **Global hotkey** (`Cmd+Alt+V` default) with push-to-talk or toggle modes
 - **Local Whisper transcription** with Metal GPU acceleration on Apple Silicon
 - **Groq cloud transcription** as an optional backend (whisper-large-v3-turbo)
-- **AI rewrite** — rewrite transcribed text using Groq Llama 3.3 70B with 4 styles (Professional, Casual, Concise, Friendly) via `Cmd+Alt+R`
+- **AI rewrite** — rewrite transcribed text using Groq Qwen3 32B with 4 styles (Professional, Casual, Concise, Friendly) via `Cmd+Alt+R`
+- **Voice-triggered skills** — say "slash linkedin" to transform speech into formatted LinkedIn posts, DMs, connection notes, and more
 - **Composition buffer** — accumulates multiple transcription segments (30min TTL) so rewrites can span across recordings
-- **Text injection** via clipboard paste (`Cmd+V`) or character-by-character keyboard simulation
+- **Text injection** into any focused application via clipboard paste (`Cmd+V`) or character-by-character keyboard simulation
 - **Voice Activity Detection** — auto-stops recording after configurable silence timeout
 - **Model management** — download Whisper models (Tiny 75MB to Large V3 3.1GB) from the Settings UI
 - **Custom dictionary** — correct terms Whisper frequently gets wrong
+- **Skills tab** in Settings — view all loaded skills with triggers and descriptions
 - **Searchable history** with export to JSON
 - **Floating overlay** pill indicator during recording (follows cursor across monitors, renders over full-screen apps)
 - **Sound feedback** on start/stop
 - **macOS notifications** on transcription complete
 - **Launch at login** support
 - **9 languages** + auto-detect (English, Spanish, French, German, Italian, Portuguese, Japanese, Korean, Chinese)
-- **License activation** via LemonSqueezy with Groq usage tracking
+- **7-day free trial** with full feature access, then license activation via LemonSqueezy
 
 ## Prerequisites
 
@@ -132,6 +153,7 @@ Open Settings from the system tray menu.
 | Show Overlay | Audio | Floating recording indicator pill |
 | Sound Feedback | Audio | Audible beep on start/stop |
 | Dictionary | Dictionary | Custom word corrections (e.g., "react native" to "React Native") |
+| Skills | Skills | View all loaded voice skills with triggers and descriptions |
 | History | History | Search, review, and export past transcriptions |
 | License | License | Activate/deactivate license key, view Groq API usage and rate limits |
 
@@ -143,10 +165,12 @@ Menu Bar Tray App (no main window)
 ├── Audio Pipeline: cpal capture → rubato resample 16kHz → VAD silence detection → buffer
 ├── Transcription: whisper-rs + Metal GPU → dictionary corrections
 │   └── Optional: Groq cloud API (whisper-large-v3-turbo)
-├── AI Rewrite: Groq Llama 3.3 70B with composition buffer (multi-segment accumulation)
+├── Voice Skills: /linkedin, /dm, /connect, /hormozi (trigger detection at start/end of speech)
+├── AI Rewrite: Groq Qwen3 32B with composition buffer (multi-segment accumulation)
+│   └── Unicode formatting: markdown bold/italic → Unicode Math Bold/Italic for LinkedIn
 ├── Text Injection: clipboard paste (arboard + CGEvent Cmd+V) or keyboard simulation (CGEvent)
 ├── Overlay Window: transparent NSPanel pill (renders over full-screen apps, follows cursor across monitors)
-└── Settings Window: tabbed config panel (General, Audio, Dictionary, History, License, About)
+└── Settings Window: tabbed config panel (General, Audio, Dictionary, Skills, History, License, About)
 ```
 
 ## Tech Stack
@@ -157,7 +181,7 @@ Menu Bar Tray App (no main window)
 | Frontend | React 19, TypeScript, Tailwind CSS 4, Vite 7 |
 | STT Engine | whisper-rs (whisper.cpp bindings) with Metal GPU |
 | Cloud STT | Groq API (optional, whisper-large-v3-turbo) |
-| AI Rewrite | Groq Llama 3.3 70B |
+| AI Rewrite | Groq Qwen3 32B |
 | Audio | cpal (capture), rubato (resampling), hound (WAV encoding) |
 | Text Injection | arboard (clipboard), core-graphics (CGEvent API) |
 | Database | SQLite via rusqlite (bundled) |
@@ -194,7 +218,8 @@ src-tauri/src/
 ├── tray/
 │   └── setup.rs        # System tray icon and menu
 ├── windows.rs          # Overlay/settings window management, NSPanel swizzle
-├── rewrite.rs          # AI rewrite via Groq Llama 3.3 70B
+├── rewrite.rs          # AI rewrite via Groq Qwen3 32B + markdown→Unicode conversion
+├── skills.rs           # Voice skill system (.md files with YAML frontmatter, trigger detection)
 ├── license.rs          # LemonSqueezy license activation
 └── sound.rs            # Audio feedback (start/stop beeps)
 
@@ -224,6 +249,7 @@ All data is stored locally. When using the Groq cloud backend, audio is sent to 
 ├── dictionary.json     # Custom word corrections
 ├── shhhtype.db         # Transcription history (SQLite)
 ├── license.json        # LemonSqueezy license activation
+├── skills/             # Voice skill .md files (linkedin, dm, connect, hormozi)
 └── models/             # Downloaded Whisper model files (.bin)
 ```
 
