@@ -2,6 +2,11 @@
 
 ## Recent Changes
 
+### minor: add LinkedIn DM and Connect skills, Skills settings tab - 2026-03-25
+- Branch: `minor/linkedin-dm-connect-skills-and-settings-tab`
+- PR: https://github.com/genesis1tech/vox2txt/pull/54
+- Summary: New /dm skill (6 DM types with anti-spam guardrails, 300-char target), /connect skill (200-char connection note), Skills tab in Settings showing all loaded skills with triggers and spoken equivalents. Removed grant skill (auto-cleanup on startup). Switched rewrite model to Qwen3 32B.
+
 ### minor: add skill aliases, end-of-text triggers, and Hormozi skill - 2026-03-25
 - Branch: `minor/52-skill-aliases-and-hormozi`
 - PR: https://github.com/genesis1tech/vox2txt/pull/52

@@ -1005,43 +1005,65 @@ function SkillsTab() {
     return <div className="p-4 text-sm text-[var(--text-secondary)]">Loading skills...</div>;
   }
 
+  const linkedinSkills = skills.filter((s) => ["linkedin", "dm", "connect"].includes(s.name));
+  const creatorStyles = skills.filter((s) => ["hormozi"].includes(s.name));
+  const otherSkills = skills.filter((s) => !["linkedin", "dm", "connect", "hormozi"].includes(s.name));
+
+  const renderSkill = (skill: SkillInfo) => (
+    <div key={skill.name} className="settings-row" style={{ flexDirection: "column", alignItems: "flex-start", gap: "4px" }}>
+      <div className="flex items-center gap-2 w-full">
+        <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+          {skill.name.charAt(0).toUpperCase() + skill.name.slice(1)}
+        </span>
+        <code className="text-xs px-1.5 py-0.5 rounded" style={{ background: "var(--bg-tertiary)", color: "#32D74B" }}>
+          {skill.trigger}
+        </code>
+        <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          say "{skill.trigger.replace("/", "slash ")}"
+        </span>
+        {skill.aliases.map((alias) => (
+          <code key={alias} className="text-xs px-1.5 py-0.5 rounded" style={{ background: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
+            {alias}
+          </code>
+        ))}
+      </div>
+      <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+        {skill.description}
+      </span>
+    </div>
+  );
+
   return (
     <div>
-      <SettingsGroup title="Voice Skills">
-        <p className="text-xs text-[var(--text-secondary)] px-3 pb-2">
-          Say the trigger command at the start or end of your recording to activate a skill.
-          You can also say "slash" instead of typing "/".
-        </p>
-        {skills.length === 0 ? (
+      <p className="text-xs text-[var(--text-secondary)] px-3 mb-4">
+        Say the trigger command at the start or end of your recording to activate a skill.
+        You can also say "slash" instead of typing "/".
+      </p>
+      {skills.length === 0 ? (
+        <SettingsGroup>
           <div className="px-3 py-4 text-sm text-[var(--text-secondary)]">
             No skills loaded. Skills are loaded from .md files in the skills directory.
           </div>
-        ) : (
-          skills.map((skill) => (
-            <div key={skill.name} className="settings-row" style={{ flexDirection: "column", alignItems: "flex-start", gap: "4px" }}>
-              <div className="flex items-center gap-2 w-full">
-                <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                  {skill.name.charAt(0).toUpperCase() + skill.name.slice(1)}
-                </span>
-                <code className="text-xs px-1.5 py-0.5 rounded" style={{ background: "var(--bg-tertiary)", color: "#FF2D55" }}>
-                  {skill.trigger}
-                </code>
-                <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                  say "{skill.trigger.replace("/", "slash ")}"
-                </span>
-                {skill.aliases.map((alias) => (
-                  <code key={alias} className="text-xs px-1.5 py-0.5 rounded" style={{ background: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
-                    {alias}
-                  </code>
-                ))}
-              </div>
-              <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                {skill.description}
-              </span>
-            </div>
-          ))
-        )}
-      </SettingsGroup>
+        </SettingsGroup>
+      ) : (
+        <>
+          {linkedinSkills.length > 0 && (
+            <SettingsGroup title="LinkedIn">
+              {linkedinSkills.map(renderSkill)}
+            </SettingsGroup>
+          )}
+          {creatorStyles.length > 0 && (
+            <SettingsGroup title="Creator Styles">
+              {creatorStyles.map(renderSkill)}
+            </SettingsGroup>
+          )}
+          {otherSkills.length > 0 && (
+            <SettingsGroup title="Other Skills">
+              {otherSkills.map(renderSkill)}
+            </SettingsGroup>
+          )}
+        </>
+      )}
     </div>
   );
 }
