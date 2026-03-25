@@ -65,6 +65,7 @@ pub fn run() {
             commands::clear_composition,
             commands::get_composition_count,
             commands::list_audio_devices,
+            commands::list_skills,
             commands::restart_app,
             commands::open_url,
             commands::check_for_updates,

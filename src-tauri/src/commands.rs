@@ -833,6 +833,24 @@ pub fn get_composition_count(state: State<'_, Arc<AppState>>) -> usize {
     state.composition.lock().len()
 }
 
+#[derive(serde::Serialize)]
+pub struct SkillInfo {
+    pub name: String,
+    pub trigger: String,
+    pub aliases: Vec<String>,
+    pub description: String,
+}
+
+#[tauri::command]
+pub fn list_skills(state: State<'_, Arc<AppState>>) -> Vec<SkillInfo> {
+    state.skills.lock().iter().map(|s| SkillInfo {
+        name: s.name.clone(),
+        trigger: s.trigger.clone(),
+        aliases: s.aliases.clone(),
+        description: s.description.clone(),
+    }).collect()
+}
+
 #[tauri::command]
 pub fn open_url(url: String) {
     #[cfg(target_os = "macos")]

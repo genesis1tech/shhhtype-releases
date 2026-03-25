@@ -116,6 +116,14 @@ export interface UpdateInfo {
   name: string;
 }
 
+/** Skill info from Rust backend */
+export interface SkillInfo {
+  name: string;
+  trigger: string;
+  aliases: string[];
+  description: string;
+}
+
 /** Model download progress event payload */
 export interface DownloadProgress {
   model: string;

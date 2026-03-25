@@ -142,13 +142,10 @@ fn system_prompt(style: &RewriteStyle) -> &'static str {
     }
 }
 
-/// Rewrite text using Groq.
-/// Style rewrites use Llama 3.3 70B; skill rewrites (custom_prompt) use Qwen3 32B for richer results.
+/// Rewrite text using Groq (Qwen3 32B for all rewrites — fast and capable).
 pub fn rewrite_text(text: &str, style: &RewriteStyle, api_key: &str, usage: Option<&Mutex<GroqUsage>>, custom_prompt: Option<&str>) -> Result<String> {
-    let (prompt, model) = match custom_prompt {
-        Some(p) => (p, "qwen/qwen3-32b"),
-        None => (system_prompt(style), "llama-3.3-70b-versatile"),
-    };
+    let prompt = custom_prompt.unwrap_or_else(|| system_prompt(style));
+    let model = "qwen/qwen3-32b";
     let body = serde_json::json!({
         "model": model,
         "messages": [

@@ -14,6 +14,7 @@ import type {
   GroqUsage,
   AudioDevice,
   UpdateInfo,
+  SkillInfo,
 } from "./types";
 
 /** Start audio recording */
@@ -124,3 +125,7 @@ export const checkForUpdates = () =>
 /** Get cached update info (if a newer version was found) */
 export const getUpdateInfo = () =>
   invoke<UpdateInfo | null>("get_update_info");
+
+/** List all loaded skills */
+export const listSkills = () =>
+  invoke<SkillInfo[]>("list_skills");

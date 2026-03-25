@@ -19,6 +19,7 @@ import {
   restartApp,
   getUpdateInfo,
   checkForUpdates,
+  listSkills,
 } from "../lib/commands";
 import type {
   AudioDevice,
@@ -34,15 +35,17 @@ import type {
   GroqUsage,
   UpdateInfo,
   OverlayPosition,
+  SkillInfo,
 } from "../lib/types";
 import History from "./History";
 
-type Tab = "general" | "audio" | "dictionary" | "history" | "license" | "about";
+type Tab = "general" | "audio" | "dictionary" | "skills" | "history" | "license" | "about";
 
 const SIDEBAR_TABS: { id: Tab; label: string; color: string }[] = [
   { id: "general", label: "General", color: "#8E8E93" },
   { id: "audio", label: "Audio", color: "#AF52DE" },
   { id: "dictionary", label: "Dictionary", color: "#FF9500" },
+  { id: "skills", label: "Skills", color: "#FF2D55" },
   { id: "history", label: "History", color: "#34C759" },
   { id: "license", label: "License", color: "#FFCC00" },
   { id: "about", label: "About", color: "#007AFF" },
@@ -68,6 +71,11 @@ function SidebarIcon({ tab }: { tab: Tab }) {
       <svg viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round">
         <rect x="3" y="1.5" width="10" height="13" rx="1.5" />
         <path d="M6 5h4M6 8h2.5" />
+      </svg>
+    ),
+    skills: (
+      <svg viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 2l8 6-8 6V2z" />
       </svg>
     ),
     history: (
@@ -172,6 +180,7 @@ export default function Settings() {
           <AudioTab settings={settings} save={save} />
         )}
         {activeTab === "dictionary" && <DictionaryEditor />}
+        {activeTab === "skills" && <SkillsTab />}
         {activeTab === "history" && <History />}
         {activeTab === "license" && <LicenseTab />}
         {activeTab === "about" && <AboutTab />}
@@ -977,6 +986,63 @@ function GroqUsageCard() {
         )}
       </div>
     </SettingsGroup>
+  );
+}
+
+/** Skills tab — shows all loaded voice-triggered skills. */
+function SkillsTab() {
+  const [skills, setSkills] = useState<SkillInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    listSkills()
+      .then(setSkills)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return <div className="p-4 text-sm text-[var(--text-secondary)]">Loading skills...</div>;
+  }
+
+  return (
+    <div>
+      <SettingsGroup title="Voice Skills">
+        <p className="text-xs text-[var(--text-secondary)] px-3 pb-2">
+          Say the trigger command at the start or end of your recording to activate a skill.
+          You can also say "slash" instead of typing "/".
+        </p>
+        {skills.length === 0 ? (
+          <div className="px-3 py-4 text-sm text-[var(--text-secondary)]">
+            No skills loaded. Skills are loaded from .md files in the skills directory.
+          </div>
+        ) : (
+          skills.map((skill) => (
+            <div key={skill.name} className="settings-row" style={{ flexDirection: "column", alignItems: "flex-start", gap: "4px" }}>
+              <div className="flex items-center gap-2 w-full">
+                <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                  {skill.name.charAt(0).toUpperCase() + skill.name.slice(1)}
+                </span>
+                <code className="text-xs px-1.5 py-0.5 rounded" style={{ background: "var(--bg-tertiary)", color: "#FF2D55" }}>
+                  {skill.trigger}
+                </code>
+                <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                  say "{skill.trigger.replace("/", "slash ")}"
+                </span>
+                {skill.aliases.map((alias) => (
+                  <code key={alias} className="text-xs px-1.5 py-0.5 rounded" style={{ background: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
+                    {alias}
+                  </code>
+                ))}
+              </div>
+              <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                {skill.description}
+              </span>
+            </div>
+          ))
+        )}
+      </SettingsGroup>
+    </div>
   );
 }
 
