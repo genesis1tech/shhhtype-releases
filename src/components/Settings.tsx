@@ -707,7 +707,10 @@ function GeneralTab({
 
       {/* SYSTEM */}
       <SettingsGroup title="System">
-        <SettingsRow label="Launch at login">
+        <SettingsRow
+          label="Launch at login"
+          description="Automatically start ShhhType when you log in"
+        >
           <input
             type="checkbox"
             className="apple-toggle"
@@ -1044,7 +1047,7 @@ function LicenseTab() {
           <div className="px-4 py-3 space-y-3">
             <p className="text-white/55 text-[13px]">
               Your license is active on this machine. Cloud transcription and AI
-              rewrite are unlocked.
+              rewrite are enabled and enforced.
             </p>
             <div className="flex items-center gap-3">
               <button
@@ -1064,8 +1067,8 @@ function LicenseTab() {
         <SettingsGroup>
           <div className="px-4 py-3 space-y-3">
             <p className="text-white/55 text-[13px]">
-              Enter your license key to unlock cloud transcription and AI
-              rewrite.
+              A license is required for cloud transcription and AI rewrite.
+              Enter your license key to unlock these features.
             </p>
             <div className="flex gap-2">
               <input
@@ -1157,6 +1160,26 @@ function AboutTab() {
         >
           {checking ? "Checking..." : "Check for Updates"}
         </button>
+
+        <div className="flex gap-3 justify-center mt-4 text-[12px]">
+          <button
+            onClick={() => openReleaseUrl("https://shhhtype.com/terms")}
+            className="text-white/40 hover:text-white/70 cursor-pointer"
+          >
+            Terms and Conditions
+          </button>
+          <span className="text-white/20">|</span>
+          <button
+            onClick={() => openReleaseUrl("https://shhhtype.com/privacy")}
+            className="text-white/40 hover:text-white/70 cursor-pointer"
+          >
+            Privacy Policy
+          </button>
+        </div>
+
+        <p className="text-white/25 text-[11px] mt-3">
+          &copy; 2026 Genesis 1 Technologies, LLC
+        </p>
       </div>
     </SettingsGroup>
   );
