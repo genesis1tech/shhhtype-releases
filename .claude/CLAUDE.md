@@ -2,6 +2,11 @@
 
 ## Recent Changes
 
+### minor: add skill aliases, end-of-text triggers, and Hormozi skill - 2026-03-25
+- Branch: `minor/52-skill-aliases-and-hormozi`
+- PR: https://github.com/genesis1tech/vox2txt/pull/52
+- Summary: Skills now support aliases (LinkedIn also triggers on /social). Trigger detection works at both start and end of transcription. Bundled Hormozi content skill with voice guidelines, frameworks, hooks, and post examples. Skills staging folder at src-tauri/skills/.
+
 ### minor: add 7-day trial, license security, and keychain-based protection - 2026-03-25
 - Branch: `minor/licensing-trial-security`
 - PR: https://github.com/genesis1tech/vox2txt/pull/49
