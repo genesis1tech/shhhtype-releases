@@ -13,11 +13,18 @@ const TRIAL_DAYS: i64 = 7;
 /// Re-validate license with LemonSqueezy every 24 hours
 const VALIDATION_INTERVAL_SECS: i64 = 86400;
 
+/// Admin license keys — full access, never expire, no LemonSqueezy call.
+const ADMIN_KEY_PREFIX: &str = "ADMIN-";
+
+/// Beta license keys — validated locally, never expire, no LemonSqueezy call.
+const BETA_KEY_PREFIX: &str = "BETA-";
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum LicenseStatus {
     Trial,
     TrialExpired,
     Licensed,
+    Beta,
     Invalid,
 }
 
@@ -106,12 +113,57 @@ fn hostname_fallback() -> String {
     format!("{:x}", hasher.finish())
 }
 
+/// Check if a license key is a valid admin key.
+/// Admin keys: ADMIN-<32 hex chars> — full access, never expire.
+fn is_valid_admin_key(key: &str) -> bool {
+    if !key.starts_with(ADMIN_KEY_PREFIX) {
+        return false;
+    }
+    let suffix = &key[ADMIN_KEY_PREFIX.len()..];
+    suffix.len() == 32 && suffix.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// Check if a license key is a valid beta key.
+/// Beta keys: BETA-<32 hex chars> — validated locally, never expire.
+fn is_valid_beta_key(key: &str) -> bool {
+    if !key.starts_with(BETA_KEY_PREFIX) {
+        return false;
+    }
+    let suffix = &key[BETA_KEY_PREFIX.len()..];
+    suffix.len() == 32 && suffix.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// Check if a key is either admin or beta (local-only, no LemonSqueezy).
+fn is_local_key(key: &str) -> bool {
+    is_valid_admin_key(key) || is_valid_beta_key(key)
+}
+
 fn license_path(data_dir: &Path) -> std::path::PathBuf {
     data_dir.join("license.json")
 }
 
-/// Activate a license key with LemonSqueezy.
+/// Activate a license key — beta keys are validated locally, others via LemonSqueezy.
 pub fn activate_license(key: &str, data_dir: &Path) -> Result<LicenseInfo> {
+    // Admin/beta keys: validate format locally, store in keychain, skip LemonSqueezy
+    if is_local_key(key) {
+        let kind = if is_valid_admin_key(key) { "admin" } else { "beta" };
+        let machine_id = get_machine_id();
+        let now = chrono::Utc::now().to_rfc3339();
+        let info = LicenseInfo {
+            license_key: key.to_string(),
+            instance_id: format!("{}-{}", kind, &machine_id[..8]),
+            activated_at: now.clone(),
+            machine_id,
+            last_validated: now,
+        };
+        if let Err(e) = keychain::set_secret(KEYCHAIN_LICENSE_KEY, key) {
+            return Err(anyhow!("Failed to store {} key: {}", kind, e));
+        }
+        save_license_metadata(data_dir, &info);
+        log::info!("{} license activated", kind);
+        return Ok(info);
+    }
+
     let machine_id = get_machine_id();
 
     let client = reqwest::blocking::Client::builder()
@@ -183,6 +235,16 @@ fn save_license_metadata(data_dir: &Path, info: &LicenseInfo) {
 /// (prevents users from creating a fake local file).
 /// Returns Trial/TrialExpired if no license is activated.
 pub fn check_license(data_dir: &Path) -> LicenseStatus {
+    // Admin/beta keys stored in keychain bypass LemonSqueezy validation
+    if let Some(key) = keychain::get_secret(KEYCHAIN_LICENSE_KEY) {
+        if is_valid_admin_key(&key) {
+            return LicenseStatus::Licensed;
+        }
+        if is_valid_beta_key(&key) {
+            return LicenseStatus::Beta;
+        }
+    }
+
     let path = license_path(data_dir);
     if !path.exists() {
         return trial_status(data_dir);
@@ -226,6 +288,13 @@ pub fn check_license(data_dir: &Path) -> LicenseStatus {
 /// On failure (revoked/expired), removes local license and demotes to trial state.
 /// On network error, trusts the cached status (grace period).
 pub fn validate_license_online(data_dir: &Path) {
+    // Admin and beta keys don't need online validation
+    if let Some(key) = keychain::get_secret(KEYCHAIN_LICENSE_KEY) {
+        if is_local_key(&key) {
+            return;
+        }
+    }
+
     let path = license_path(data_dir);
     if !path.exists() {
         return;
@@ -415,7 +484,7 @@ pub fn get_trial_info(data_dir: &Path) -> TrialInfo {
 pub fn is_app_usable(data_dir: &Path) -> bool {
     matches!(
         check_license(data_dir),
-        LicenseStatus::Licensed | LicenseStatus::Trial
+        LicenseStatus::Licensed | LicenseStatus::Beta | LicenseStatus::Trial
     )
 }
 

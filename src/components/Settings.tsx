@@ -1029,6 +1029,8 @@ function LicenseTab() {
   const statusLabel =
     status === "Licensed"
       ? "Licensed"
+      : status === "Beta"
+      ? "Licensed — Beta Tester"
       : status === "Invalid"
       ? "Invalid License"
       : status === "TrialExpired"
@@ -1038,6 +1040,8 @@ function LicenseTab() {
   const statusColor =
     status === "Licensed"
       ? "bg-[#34C759]"
+      : status === "Beta"
+      ? "bg-[#007AFF]"
       : status === "TrialExpired" || status === "Invalid"
       ? "bg-[#FF3B30]"
       : trialInfo && trialInfo.days_remaining <= 2
@@ -1059,8 +1063,8 @@ function LicenseTab() {
         </div>
       </SettingsGroup>
 
-      {/* Trial countdown banner (shown when not licensed) */}
-      {status !== "Licensed" && trialInfo && (
+      {/* Trial countdown banner (shown when not licensed/beta) */}
+      {status !== "Licensed" && status !== "Beta" && trialInfo && (
         <SettingsGroup>
           <div
             className={`px-4 py-3 ${
@@ -1110,7 +1114,7 @@ function LicenseTab() {
         </SettingsGroup>
       )}
 
-      {status === "Licensed" ? (
+      {status === "Licensed" || status === "Beta" ? (
         <SettingsGroup>
           <div className="px-4 py-3 space-y-3">
             <p className="text-white/55 text-[13px]">

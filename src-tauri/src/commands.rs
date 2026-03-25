@@ -4,7 +4,7 @@ use crate::audio::capture::AudioCapture;
 /// (cloud transcription, AI rewrite). Blocks when trial expired or license invalid.
 fn require_license(data_dir: &std::path::Path) -> Result<(), String> {
     match license::check_license(data_dir) {
-        LicenseStatus::Licensed | LicenseStatus::Trial => Ok(()),
+        LicenseStatus::Licensed | LicenseStatus::Beta | LicenseStatus::Trial => Ok(()),
         LicenseStatus::TrialExpired => Err("Your trial has expired. Subscribe to continue using ShhhType.".into()),
         LicenseStatus::Invalid => Err("Invalid license. Please re-activate in Settings > License.".into()),
     }
