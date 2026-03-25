@@ -10,6 +10,7 @@ import type {
   ModelSize,
   RewriteStyle,
   LicenseStatus,
+  TrialInfo,
   GroqUsage,
   AudioDevice,
   UpdateInfo,
@@ -97,6 +98,10 @@ export const getLicenseStatus = () =>
 /** Deactivate current license */
 export const deactivateLicense = () =>
   invoke<void>("deactivate_license");
+
+/** Get trial information (days remaining, expiry message) */
+export const getTrialInfo = () =>
+  invoke<TrialInfo>("get_trial_info");
 
 /** Clear the composition buffer */
 export const clearComposition = () => invoke<void>("clear_composition");

@@ -12,7 +12,14 @@ export type OverlayPosition = "TopCenter" | "Inline";
 
 
 /** License status */
-export type LicenseStatus = "Free" | "Licensed" | "Invalid";
+export type LicenseStatus = "Trial" | "TrialExpired" | "Licensed" | "Invalid";
+
+/** Trial information from Rust backend */
+export interface TrialInfo {
+  days_remaining: number;
+  expired: boolean;
+  message: string;
+}
 
 /** Settings matching Rust Settings struct */
 export interface Settings {

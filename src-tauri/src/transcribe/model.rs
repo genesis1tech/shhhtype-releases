@@ -81,14 +81,22 @@ pub struct DownloadProgress {
     pub percent: f64,
 }
 
+/// Minimum file size (1 MB) to consider a model file valid.
+/// Whisper model binaries are at minimum ~75 MB (Tiny). Anything smaller
+/// is likely a corrupt download or an HTTP error page saved as a .bin file.
+const MIN_MODEL_FILE_SIZE: u64 = 1_000_000;
+
 /// Resolve the full path for a model within the data directory.
 pub fn model_path(data_dir: &Path, size: &ModelSize) -> PathBuf {
     data_dir.join("models").join(size.filename())
 }
 
-/// Check if a model file exists locally.
+/// Check if a model file exists locally and is large enough to be valid.
 pub fn is_model_downloaded(data_dir: &Path, size: &ModelSize) -> bool {
-    model_path(data_dir, size).exists()
+    let path = model_path(data_dir, size);
+    std::fs::metadata(&path)
+        .map(|m| m.len() >= MIN_MODEL_FILE_SIZE)
+        .unwrap_or(false)
 }
 
 /// Ensure the models directory exists.
@@ -114,6 +122,8 @@ pub fn list_downloaded_models(data_dir: &Path) -> Vec<ModelSize> {
 }
 
 /// Get download status of all models.
+/// A model is only marked as downloaded if the file exists AND exceeds the
+/// minimum expected size, preventing corrupt/error-page files from being used.
 pub fn get_all_model_status(data_dir: &Path) -> Vec<ModelStatus> {
     let all = vec![
         ModelSize::Tiny,
@@ -126,12 +136,12 @@ pub fn get_all_model_status(data_dir: &Path) -> Vec<ModelStatus> {
     all.iter()
         .map(|size| {
             let path = model_path(data_dir, size);
-            let downloaded = path.exists();
-            let size_bytes = if downloaded {
+            let size_bytes = if path.exists() {
                 std::fs::metadata(&path).ok().map(|m| m.len())
             } else {
                 None
             };
+            let downloaded = size_bytes.map_or(false, |s| s >= MIN_MODEL_FILE_SIZE);
             ModelStatus {
                 model: size.id().to_string(),
                 downloaded,
@@ -159,32 +169,56 @@ pub async fn download_model(
     log::info!("Downloading model {} from {}", size.id(), url);
 
     let response = reqwest::get(&url).await?;
+
+    // Validate HTTP response status before streaming content
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        // Clean up any leftover temp file
+        let _ = tokio::fs::remove_file(&tmp_path).await;
+        return Err(anyhow::anyhow!(
+            "Model download failed (HTTP {}): {}",
+            status,
+            &body[..body.len().min(200)]
+        ));
+    }
+
     let total = response.content_length().unwrap_or(0);
 
     let mut file = tokio::fs::File::create(&tmp_path).await?;
     let mut downloaded: u64 = 0;
     let mut stream = response.bytes_stream();
 
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk?;
-        tokio::io::AsyncWriteExt::write_all(&mut file, &chunk).await?;
-        downloaded += chunk.len() as u64;
+    let result: Result<()> = async {
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk?;
+            tokio::io::AsyncWriteExt::write_all(&mut file, &chunk).await?;
+            downloaded += chunk.len() as u64;
 
-        let percent = if total > 0 {
-            (downloaded as f64 / total as f64) * 100.0
-        } else {
-            0.0
-        };
+            let percent = if total > 0 {
+                (downloaded as f64 / total as f64) * 100.0
+            } else {
+                0.0
+            };
 
-        let _ = app.emit(
-            "model-download-progress",
-            DownloadProgress {
-                model: size.id().to_string(),
-                downloaded,
-                total,
-                percent,
-            },
-        );
+            let _ = app.emit(
+                "model-download-progress",
+                DownloadProgress {
+                    model: size.id().to_string(),
+                    downloaded,
+                    total,
+                    percent,
+                },
+            );
+        }
+        Ok(())
+    }
+    .await;
+
+    // Clean up temp file on streaming failure
+    if let Err(e) = result {
+        let _ = tokio::fs::remove_file(&tmp_path).await;
+        return Err(e);
     }
 
     // Atomic rename from .tmp to final path

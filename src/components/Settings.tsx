@@ -13,6 +13,7 @@ import {
   activateLicense,
   getLicenseStatus,
   deactivateLicense,
+  getTrialInfo,
   getGroqUsage,
   listAudioDevices,
   restartApp,
@@ -29,6 +30,7 @@ import type {
   TranscriptionBackend,
   RewriteStyle,
   LicenseStatus,
+  TrialInfo,
   GroqUsage,
   UpdateInfo,
   OverlayPosition,
@@ -980,13 +982,15 @@ function GroqUsageCard() {
 
 /** License activation and management. */
 function LicenseTab() {
-  const [status, setStatus] = useState<LicenseStatus>("Free");
+  const [status, setStatus] = useState<LicenseStatus>("Trial");
+  const [trialInfo, setTrialInfo] = useState<TrialInfo | null>(null);
   const [key, setKey] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     getLicenseStatus().then(setStatus).catch(console.error);
+    getTrialInfo().then(setTrialInfo).catch(console.error);
   }, []);
 
   const handleActivate = async () => {
@@ -1009,7 +1013,8 @@ function LicenseTab() {
     setError(null);
     try {
       await deactivateLicense();
-      setStatus("Free");
+      setStatus("Trial");
+      getTrialInfo().then(setTrialInfo).catch(console.error);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -1017,37 +1022,100 @@ function LicenseTab() {
     }
   };
 
+  const openSubscribe = () => {
+    invoke("open_url", { url: "https://shhhtype.com" });
+  };
+
+  const statusLabel =
+    status === "Licensed"
+      ? "Licensed"
+      : status === "Invalid"
+      ? "Invalid License"
+      : status === "TrialExpired"
+      ? "Trial Expired"
+      : "7-Day Trial";
+
+  const statusColor =
+    status === "Licensed"
+      ? "bg-[#34C759]"
+      : status === "TrialExpired" || status === "Invalid"
+      ? "bg-[#FF3B30]"
+      : trialInfo && trialInfo.days_remaining <= 2
+      ? "bg-[#FF9500]"
+      : "bg-[#FFCC00]";
+
   return (
     <>
       <SettingsGroup>
         <div className="settings-row">
           <div className="flex items-center gap-3">
             <span
-              className={`inline-block h-3 w-3 rounded-full ${
-                status === "Licensed"
-                  ? "bg-[#34C759]"
-                  : status === "Invalid"
-                  ? "bg-[#FF3B30]"
-                  : "bg-white/30"
-              }`}
+              className={`inline-block h-3 w-3 rounded-full ${statusColor}`}
             />
             <span className="text-[13px] font-medium text-white/85">
-              {status === "Licensed"
-                ? "Licensed"
-                : status === "Invalid"
-                ? "Invalid License"
-                : "Free Version"}
+              {statusLabel}
             </span>
           </div>
         </div>
       </SettingsGroup>
 
+      {/* Trial countdown banner (shown when not licensed) */}
+      {status !== "Licensed" && trialInfo && (
+        <SettingsGroup>
+          <div
+            className={`px-4 py-3 ${
+              trialInfo.expired
+                ? "bg-[#FF3B30]/10 border border-[#FF3B30]/30 rounded-lg"
+                : trialInfo.days_remaining <= 2
+                ? "bg-[#FF9500]/10 border border-[#FF9500]/30 rounded-lg"
+                : ""
+            }`}
+          >
+            <p
+              className={`text-[13px] font-medium ${
+                trialInfo.expired
+                  ? "text-[#FF3B30]"
+                  : trialInfo.days_remaining <= 2
+                  ? "text-[#FF9500]"
+                  : "text-white/70"
+              }`}
+            >
+              {trialInfo.message}
+            </p>
+            {!trialInfo.expired && (
+              <div className="flex gap-1 mt-2">
+                {Array.from({ length: 7 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={`h-1.5 flex-1 rounded-full ${
+                      i < trialInfo.days_remaining
+                        ? trialInfo.days_remaining <= 2
+                          ? "bg-[#FF9500]"
+                          : "bg-[#FFCC00]"
+                        : "bg-white/10"
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
+            {(trialInfo.expired || trialInfo.days_remaining <= 3) && (
+              <button
+                onClick={openSubscribe}
+                className="apple-button mt-3 w-full"
+              >
+                Subscribe — $15/mo or $150/yr
+              </button>
+            )}
+          </div>
+        </SettingsGroup>
+      )}
+
       {status === "Licensed" ? (
         <SettingsGroup>
           <div className="px-4 py-3 space-y-3">
             <p className="text-white/55 text-[13px]">
-              Your license is active on this machine. Cloud transcription and AI
-              rewrite are enabled and enforced.
+              Your license is active on this machine. All features are unlocked
+              including cloud transcription and AI rewrite.
             </p>
             <div className="flex items-center gap-3">
               <button
@@ -1067,8 +1135,9 @@ function LicenseTab() {
         <SettingsGroup>
           <div className="px-4 py-3 space-y-3">
             <p className="text-white/55 text-[13px]">
-              A license is required for cloud transcription and AI rewrite.
-              Enter your license key to unlock these features.
+              {trialInfo?.expired
+                ? "Enter your license key to restore access to ShhhType."
+                : "Enter your license key to unlock all features including cloud transcription and AI rewrite."}
             </p>
             <div className="flex gap-2">
               <input
@@ -1100,8 +1169,12 @@ function LicenseTab() {
 function AboutTab() {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [checking, setChecking] = useState(false);
+  const [version, setVersion] = useState("");
 
   useEffect(() => {
+    import("@tauri-apps/api/app").then((mod) =>
+      mod.getVersion().then(setVersion)
+    );
     getUpdateInfo().then(setUpdateInfo);
 
     const unlisten = listen<UpdateInfo>("update-available", (event) => {
@@ -1130,7 +1203,7 @@ function AboutTab() {
     <SettingsGroup>
       <div className="px-4 py-6 text-center">
         <p className="text-white/85 font-medium text-[15px]">
-          ShhhType v0.1.0
+          ShhhType {version ? `v${version}` : ""}
         </p>
         <p className="text-white/55 text-[13px] mt-1">
           Voice-to-text developer tool for macOS.

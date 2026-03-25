@@ -19,6 +19,10 @@ fn is_accessibility_trusted() -> bool {
 
 /// Inject text into the focused application via clipboard + Cmd+V.
 /// This is the most compatible method (works in ~98% of apps).
+///
+/// Returns an error if accessibility permission is missing. In that case the text
+/// remains on the clipboard but Cmd+V was NOT simulated — callers should treat
+/// this as a copy-only fallback and NOT update composition state.
 pub fn inject_via_clipboard(text: &str) -> Result<()> {
     // 1. Save current clipboard content
     let mut clipboard = arboard::Clipboard::new()?;
@@ -31,7 +35,10 @@ pub fn inject_via_clipboard(text: &str) -> Result<()> {
     #[cfg(target_os = "macos")]
     if !is_accessibility_trusted() {
         log::warn!("Accessibility not trusted — text copied to clipboard but cannot simulate Cmd+V. Toggle Accessibility in System Settings.");
-        return Ok(());
+        return Err(anyhow::anyhow!(
+            "Accessibility permission required for text injection. Text copied to clipboard instead. \
+             Enable Accessibility in System Settings > Privacy & Security > Accessibility."
+        ));
     }
 
     // 4. Delay to ensure clipboard is ready and target app has focus

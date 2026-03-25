@@ -61,6 +61,7 @@ pub fn run() {
             commands::activate_license,
             commands::get_license_status,
             commands::deactivate_license,
+            commands::get_trial_info,
             commands::clear_composition,
             commands::get_composition_count,
             commands::list_audio_devices,
@@ -78,6 +79,17 @@ pub fn run() {
             let state = app_handle.state::<Arc<AppState>>();
             state.init_db()?;
 
+            // Ensure trial start date is recorded in keychain
+            license::ensure_trial_start(&state.data_dir);
+
+            // Validate license with LemonSqueezy (every 24h, background)
+            {
+                let data_dir = state.data_dir.clone();
+                std::thread::spawn(move || {
+                    license::validate_license_online(&data_dir);
+                });
+            }
+
             // Ensure default skills exist and load them
             skills::ensure_default_skills(&state.data_dir);
             *state.skills.lock() = skills::load_skills(&state.data_dir);
@@ -86,6 +98,29 @@ pub fn run() {
             // System Settings > Accessibility. Microphone permission is requested
             // via the onboarding wizard or when the user first tries to record.
             commands::request_accessibility_permission();
+
+            // Reconcile auto-launch setting with actual OS autostart state
+            {
+                use tauri_plugin_autostart::ManagerExt;
+                let manager = app.handle().autolaunch();
+                let config_auto_launch = state.config.read().auto_launch;
+                match manager.is_enabled() {
+                    Ok(os_enabled) if os_enabled != config_auto_launch => {
+                        let result = if config_auto_launch {
+                            manager.enable()
+                        } else {
+                            manager.disable()
+                        };
+                        if let Err(e) = result {
+                            log::warn!("Failed to reconcile auto-launch state: {}", e);
+                        } else {
+                            log::info!("Auto-launch reconciled to {}", config_auto_launch);
+                        }
+                    }
+                    Err(e) => log::warn!("Failed to check auto-launch state: {}", e),
+                    _ => {} // already in sync
+                }
+            }
 
             // Create overlay window (hidden, transparent, click-through)
             let overlay = WebviewWindowBuilder::new(
@@ -226,9 +261,16 @@ pub fn register_hotkey(app: &tauri::AppHandle, shortcut_str: &str) {
             );
 
             if should_start {
+                // Block recording when trial has expired
+                if !license::is_app_usable(&state.data_dir) {
+                    log::warn!("Hotkey: trial expired, recording blocked");
+                    let _ = app_handle.emit("recording-error", "Your 7-day trial has expired. Subscribe to continue using ShhhType.");
+                    return;
+                }
                 log::info!("Hotkey: starting recording");
                 if let Err(e) = commands::do_start_recording(state.inner(), Some(app_handle.clone())) {
                     log::error!("Hotkey start recording failed: {}", e);
+                    let _ = app_handle.emit("recording-error", e);
                 } else {
                     let config = state.config.read();
                     if config.sound_feedback {
@@ -288,7 +330,10 @@ pub fn register_hotkey(app: &tauri::AppHandle, shortcut_str: &str) {
                                 *state.last_transcription.lock() = Some(text.clone());
                                 state.composition.lock().append(text.clone(), config.injection_method.clone());
                             } else {
-                                log::error!("Text injection failed: {}", injection_ok.unwrap_err());
+                                let err = injection_ok.unwrap_err();
+                                log::error!("Text injection failed: {}", err);
+                                // Notify frontend that text was only copied, not injected
+                                let _ = app.emit("injection-copy-only", err.to_string());
                             }
 
                             let segment_count = state.composition.lock().len();
@@ -341,6 +386,11 @@ pub fn register_rewrite_hotkey(app: &tauri::AppHandle, shortcut_str: &str) {
             let config = state.config.read().clone();
             if !config.rewrite_enabled {
                 log::info!("Rewrite hotkey pressed but rewrite is disabled");
+                return;
+            }
+            // AI rewrite requires a valid license or active trial
+            if !license::is_app_usable(&state.data_dir) {
+                log::warn!("Rewrite hotkey pressed but trial expired / no valid license");
                 return;
             }
             if config.groq_api_key.as_deref().unwrap_or("").is_empty() {
@@ -451,8 +501,9 @@ fn save_to_history(state: &AppState, text: &str, duration_ms: i64) {
 /// Send a macOS notification with transcription preview.
 fn send_notification(app: &tauri::AppHandle, text: &str) {
     use tauri_plugin_notification::NotificationExt;
-    let preview = if text.len() > 80 {
-        format!("{}...", &text[..77])
+    let preview = if text.chars().count() > 80 {
+        let truncated: String = text.chars().take(77).collect();
+        format!("{}...", truncated)
     } else {
         text.to_string()
     };

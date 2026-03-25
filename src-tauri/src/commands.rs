@@ -1,4 +1,24 @@
 use crate::audio::capture::AudioCapture;
+
+/// Check that the user holds a valid license or active trial for premium features
+/// (cloud transcription, AI rewrite). Blocks when trial expired or license invalid.
+fn require_license(data_dir: &std::path::Path) -> Result<(), String> {
+    match license::check_license(data_dir) {
+        LicenseStatus::Licensed | LicenseStatus::Trial => Ok(()),
+        LicenseStatus::TrialExpired => Err("Your trial has expired. Subscribe to continue using ShhhType.".into()),
+        LicenseStatus::Invalid => Err("Invalid license. Please re-activate in Settings > License.".into()),
+    }
+}
+
+/// Check that the app is usable (licensed or active trial).
+/// Blocks all core features (recording, transcription) when trial expires.
+fn require_app_usable(data_dir: &std::path::Path) -> Result<(), String> {
+    if license::is_app_usable(data_dir) {
+        Ok(())
+    } else {
+        Err("Your 7-day trial has expired. Subscribe to continue using ShhhType.".into())
+    }
+}
 use crate::audio::resampler::resample_to_16khz;
 use cpal::traits::{DeviceTrait, HostTrait};
 use crate::config::settings::{RewriteStyle, Settings, TranscriptionBackend};
@@ -23,6 +43,9 @@ pub struct TranscriptionCompletePayload {
 /// Start audio capture. Shared by both the Tauri command and the hotkey handler.
 /// `app` is optional — when provided, waveform levels are emitted to the frontend.
 pub fn do_start_recording(state: &Arc<AppState>, app: Option<AppHandle>) -> Result<(), String> {
+    // Block recording when trial has expired
+    require_app_usable(&state.data_dir)?;
+
     if state.audio_thread.lock().is_some() {
         return Err("Already recording".into());
     }
@@ -35,8 +58,6 @@ pub fn do_start_recording(state: &Arc<AppState>, app: Option<AppHandle>) -> Resu
 
     state.audio_buffer.lock().clear();
     state.audio_stop_flag.store(false, Ordering::Relaxed);
-    state.set_state(STATE_RECORDING);
-    *state.recording_started_at.lock() = Some(Instant::now());
 
     let buffer = Arc::clone(&state.audio_buffer);
     let stop_flag = Arc::clone(&state.audio_stop_flag);
@@ -48,10 +69,14 @@ pub fn do_start_recording(state: &Arc<AppState>, app: Option<AppHandle>) -> Resu
 
     let audio_device = config.audio_input_device.clone();
 
+    // Startup handshake: worker thread sends Ok(()) or Err(msg) once capture init completes
+    let (startup_tx, startup_rx) = std::sync::mpsc::channel::<Result<(), String>>();
+
     let handle = std::thread::spawn(move || {
         let mut capture = AudioCapture::new();
         if let Err(e) = capture.start(buffer.clone(), audio_device.as_deref()) {
             log::error!("Audio capture failed to start: {}", e);
+            let _ = startup_tx.send(Err(format!("Audio capture failed to start: {}", e)));
             return;
         }
 
@@ -59,6 +84,9 @@ pub fn do_start_recording(state: &Arc<AppState>, app: Option<AppHandle>) -> Resu
         sample_rate_out.store(sr, Ordering::Relaxed);
         log::info!("Audio capture thread running at {}Hz, silence timeout: {}s ({} frames)",
             sr, config.vad_silence_timeout, vad_silence_frames);
+
+        // Signal successful startup to the caller
+        let _ = startup_tx.send(Ok(()));
 
         let mut vad = EnergyVad::new(vad_threshold, vad_silence_frames);
         let mut has_speech = false;
@@ -125,9 +153,32 @@ pub fn do_start_recording(state: &Arc<AppState>, app: Option<AppHandle>) -> Resu
         log::info!("Audio capture thread exiting");
     });
 
-    *state.audio_thread.lock() = Some(handle);
-    log::info!("Recording started");
-    Ok(())
+    // Wait for the worker thread to confirm capture started successfully
+    match startup_rx.recv() {
+        Ok(Ok(())) => {
+            state.set_state(STATE_RECORDING);
+            *state.recording_started_at.lock() = Some(Instant::now());
+            *state.audio_thread.lock() = Some(handle);
+            log::info!("Recording started");
+            Ok(())
+        }
+        Ok(Err(e)) => {
+            // Capture failed — join the thread and ensure clean state
+            let _ = handle.join();
+            state.set_state(STATE_IDLE);
+            *state.audio_thread.lock() = None;
+            *state.recording_started_at.lock() = None;
+            Err(e)
+        }
+        Err(_) => {
+            // Channel closed unexpectedly (thread panicked before sending)
+            let _ = handle.join();
+            state.set_state(STATE_IDLE);
+            *state.audio_thread.lock() = None;
+            *state.recording_started_at.lock() = None;
+            Err("Audio capture thread exited unexpectedly".into())
+        }
+    }
 }
 
 /// Stop recording and transcribe. Shared by both the Tauri command and the hotkey handler.
@@ -183,6 +234,11 @@ pub fn do_stop_and_transcribe(state: &Arc<AppState>) -> Result<String, String> {
     let config = state.config.read().clone();
     let transcribed_text = match config.transcription_backend {
         TranscriptionBackend::Cloud => {
+            // Cloud transcription is a premium feature — require a valid license
+            if let Err(e) = require_license(&state.data_dir) {
+                state.set_state(STATE_IDLE);
+                return Err(e);
+            }
             // Cloud: send raw audio at native sample rate — Groq downsamples server-side.
             // This skips the expensive client-side resampling step entirely.
             let api_key = config.groq_api_key.as_deref().unwrap_or("");
@@ -318,6 +374,7 @@ pub fn update_settings(
 ) -> Result<(), String> {
     let old = state.config.read().clone();
     let hotkey_changed = old.shortcut != settings.shortcut || old.rewrite_hotkey != settings.rewrite_hotkey;
+    let auto_launch_changed = old.auto_launch != settings.auto_launch;
 
     let rewrite_was_enabled = old.rewrite_enabled;
     settings.save(&state.data_dir).map_err(|e| e.to_string())?;
@@ -334,6 +391,22 @@ pub fn update_settings(
     if hotkey_changed {
         log::info!("Hotkey changed — restart required to take effect");
         let _ = app.emit("hotkey-restart-required", ());
+    }
+
+    // Wire auto_launch to the OS autostart manager
+    if auto_launch_changed {
+        use tauri_plugin_autostart::ManagerExt;
+        let manager = app.autolaunch();
+        let result = if settings.auto_launch {
+            manager.enable().map_err(|e| format!("Failed to enable auto-launch: {}", e))
+        } else {
+            manager.disable().map_err(|e| format!("Failed to disable auto-launch: {}", e))
+        };
+        if let Err(e) = &result {
+            log::error!("{}", e);
+            return Err(e.clone());
+        }
+        log::info!("Auto-launch {}", if settings.auto_launch { "enabled" } else { "disabled" });
     }
 
     Ok(())
@@ -449,9 +522,10 @@ pub fn request_microphone_permission() {
             let host = cpal::default_host();
             if let Some(device) = host.default_input_device() {
                 if let Ok(config) = device.default_input_config() {
+                    let sample_format = config.sample_format();
                     if let Ok(stream) = device.build_input_stream_raw(
                         &config.into(),
-                        cpal::SampleFormat::F32,
+                        sample_format,
                         move |_data: &cpal::Data, _info: &cpal::InputCallbackInfo| {},
                         move |err| { log::error!("Permission stream error: {}", err); },
                         None,
@@ -546,6 +620,9 @@ pub fn rewrite_last_transcription(
     state: State<'_, Arc<AppState>>,
     style: Option<RewriteStyle>,
 ) -> Result<RewriteResult, String> {
+    // AI rewrite is a premium feature
+    require_license(&state.data_dir)?;
+
     let config = state.config.read().clone();
 
     let api_key = config.groq_api_key.as_deref().unwrap_or("");
@@ -643,6 +720,9 @@ pub fn rewrite_and_inject(
     state: State<'_, Arc<AppState>>,
     style: Option<RewriteStyle>,
 ) -> Result<RewriteResult, String> {
+    // AI rewrite is a premium feature
+    require_license(&state.data_dir)?;
+
     // Bump generation to invalidate any pending 3s hide timer from recording
     state.overlay_generation.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
@@ -734,6 +814,11 @@ pub fn get_license_status(state: State<'_, Arc<AppState>>) -> LicenseStatus {
 #[tauri::command]
 pub fn deactivate_license(state: State<'_, Arc<AppState>>) -> Result<(), String> {
     license::deactivate_license(&state.data_dir).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_trial_info(state: State<'_, Arc<AppState>>) -> license::TrialInfo {
+    license::get_trial_info(&state.data_dir)
 }
 
 #[tauri::command]

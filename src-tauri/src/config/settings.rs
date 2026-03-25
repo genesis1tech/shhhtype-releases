@@ -121,22 +121,69 @@ impl Default for Settings {
     }
 }
 
+const KEYCHAIN_GROQ_API_KEY: &str = "groq_api_key";
+
 impl Settings {
     /// Load settings from the data directory.
+    /// Retrieves secrets from the OS keychain instead of plaintext JSON.
     pub fn load(data_dir: &Path) -> Result<Self> {
         let path = data_dir.join("settings.json");
         if !path.exists() {
             return Ok(Self::default());
         }
         let content = std::fs::read_to_string(&path)?;
-        let settings: Settings = serde_json::from_str(&content)?;
+        let mut settings: Settings = serde_json::from_str(&content)?;
+
+        // Retrieve API key from keychain (overrides any value in JSON)
+        if let Some(key) = super::keychain::get_secret(KEYCHAIN_GROQ_API_KEY) {
+            settings.groq_api_key = Some(key);
+        }
+
+        // Migrate: if a plaintext API key exists in settings.json, move it to keychain
+        if settings.groq_api_key.is_some() {
+            // Re-read the raw JSON to check if the key was stored in plaintext
+            if let Ok(raw) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(plain_key) = raw.get("groq_api_key").and_then(|v| v.as_str()) {
+                    if !plain_key.is_empty() {
+                        log::info!("Migrating groq_api_key from plaintext settings to keychain");
+                        if super::keychain::set_secret(KEYCHAIN_GROQ_API_KEY, plain_key).is_ok() {
+                            // Re-save settings without the plaintext key
+                            let mut clean = settings.clone();
+                            clean.groq_api_key = settings.groq_api_key.clone();
+                            clean.save_without_secrets(data_dir)?;
+                        }
+                    }
+                }
+            }
+        }
+
         Ok(settings)
     }
 
     /// Save settings to the data directory.
+    /// Stores secrets in the OS keychain and excludes them from the JSON file.
     pub fn save(&self, data_dir: &Path) -> Result<()> {
+        // Store API key in keychain
+        if let Some(ref key) = self.groq_api_key {
+            if !key.is_empty() {
+                if let Err(e) = super::keychain::set_secret(KEYCHAIN_GROQ_API_KEY, key) {
+                    log::error!("Failed to store API key in keychain: {}", e);
+                }
+            }
+        } else {
+            let _ = super::keychain::delete_secret(KEYCHAIN_GROQ_API_KEY);
+        }
+
+        self.save_without_secrets(data_dir)
+    }
+
+    /// Save settings JSON without embedding secrets in plaintext.
+    fn save_without_secrets(&self, data_dir: &Path) -> Result<()> {
         let path = data_dir.join("settings.json");
-        let content = serde_json::to_string_pretty(self)?;
+        let mut clean = self.clone();
+        // Never write the API key to disk — it lives in the keychain
+        clean.groq_api_key = None;
+        let content = serde_json::to_string_pretty(&clean)?;
         std::fs::write(&path, content)?;
         Ok(())
     }

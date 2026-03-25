@@ -2,6 +2,16 @@
 
 ## Recent Changes
 
+### minor: add 7-day trial, license security, and keychain-based protection - 2026-03-25
+- Branch: `minor/licensing-trial-security`
+- PR: https://github.com/genesis1tech/vox2txt/pull/49
+- Summary: 7-day trial with full feature access, trial start in macOS Keychain (anti-tamper), LemonSqueezy online validation every 24h, license.json requires Keychain key, all features blocked on expiry, License tab redesign with countdown UI, dynamic app version in About tab.
+
+### docs: add Terms and Conditions and Privacy Policy - 2026-03-25
+- Branch: `docs/add-terms-and-privacy`
+- PR: https://github.com/genesis1tech/vox2txt/pull/48
+- Summary: Terms (17 sections) and Privacy Policy (11 sections) for Genesis 1 Technologies, LLC. Legal links in About tab open shhhtype.com/terms and shhhtype.com/privacy. Copyright notice added.
+
 ### minor: add overlay position option — top center vs inline at cursor - 2026-03-23
 - Branch: `minor/inline-overlay-position`
 - PR: https://github.com/genesis1tech/vox2txt/pull/45
@@ -16,13 +26,3 @@
 - Branch: `minor/hotkey-settings-and-transcription-perf`
 - PR: https://github.com/genesis1tech/vox2txt/pull/31
 - Summary: Dynamic hotkey changes with restart flow, fixed key capture (e.code), skip resampling for Cloud transcription (~3s saved), 16-bit WAV, HTTP client reuse, dictionary caching, keyboard injection speedup, UI polish.
-
-### minor: rename app from vox2txt to ShhhType with new logo - 2026-03-17
-- Branch: `minor/rename-to-shhhtype`
-- PR: https://github.com/genesis1tech/vox2txt/pull/28
-- Summary: Full rebrand — new "shh" finger gesture logo with two-tone amber/cyan scheme, renamed all identifiers (crate, bundle ID, data paths, DB), updated all user-facing strings across Rust + React, regenerated all icon assets.
-
-### fix: overlay popup appears over full-screen apps via NSPanel swizzle - 2026-02-21
-- Branch: `claude/fix-popup-z-index-8DY88`
-- PR: https://github.com/genesis1tech/vox2txt/pull/19
-- Summary: Swizzle overlay NSWindow to NSPanel at runtime so it renders over macOS full-screen Spaces. Removed conflicting always_on_top, set NonactivatingPanel style mask to prevent focus stealing.
