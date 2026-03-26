@@ -42,7 +42,7 @@ pub struct Settings {
     /// Style for AI rewrite.
     #[serde(default)]
     pub rewrite_style: RewriteStyle,
-    /// Hotkey for AI rewrite (e.g., "CmdOrCtrl+Alt+R").
+    /// Hotkey for AI rewrite (e.g., "Command+Alt+R").
     #[serde(default = "default_rewrite_hotkey")]
     pub rewrite_hotkey: String,
     /// Selected audio input device name. None = system default.
@@ -58,7 +58,7 @@ fn default_vad_silence_timeout() -> f32 {
 }
 
 fn default_rewrite_hotkey() -> String {
-    "CmdOrCtrl+Alt+R".to_string()
+    "Command+Alt+R".to_string()
 }
 
 /// Transcription backend selection.
@@ -100,7 +100,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             model_size: ModelSize::Base,
-            shortcut: "CmdOrCtrl+Alt+V".to_string(),
+            shortcut: "Alt+V".to_string(),
             hotkey_mode: HotkeyMode::PushToTalk,
             injection_method: InjectionMethod::Clipboard,
             language: "en".to_string(),
