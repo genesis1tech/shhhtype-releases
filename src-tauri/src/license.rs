@@ -428,6 +428,7 @@ pub fn ensure_trial_start(data_dir: &Path) {
     let now = chrono::Utc::now().to_rfc3339();
     let _ = keychain::set_secret(KEYCHAIN_TRIAL_START, &now);
     log::info!("Trial started: {}", now);
+    crate::analytics::track("trial_started", serde_json::json!({}));
 }
 
 /// Get the number of days remaining in the trial (can be negative).

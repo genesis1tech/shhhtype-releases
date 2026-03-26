@@ -1,3 +1,4 @@
+mod analytics;
 mod audio;
 mod commands;
 mod config;
@@ -94,6 +95,9 @@ pub fn run() {
             // Ensure default skills exist and load them
             skills::ensure_default_skills(&state.data_dir);
             *state.skills.lock() = skills::load_skills(&state.data_dir);
+
+            // Track app launch
+            analytics::track("app_launched", serde_json::json!({}));
 
             // Request accessibility permission on startup so the app appears in
             // System Settings > Accessibility. Microphone permission is requested
@@ -306,6 +310,14 @@ pub fn register_hotkey(app: &tauri::AppHandle, shortcut_str: &str) {
                             // Save to history DB with actual duration
                             save_to_history(&state, &text, duration_ms);
 
+                            // Track transcription analytics
+                            analytics::track("transcription_completed", serde_json::json!({
+                                "backend": format!("{:?}", config.transcription_backend),
+                                "duration_ms": duration_ms,
+                                "word_count": text.split_whitespace().count(),
+                                "char_count": text.chars().count(),
+                            }));
+
                             // Send macOS notification
                             send_notification(&app, &text);
 
@@ -438,6 +450,9 @@ pub fn register_rewrite_hotkey(app: &tauri::AppHandle, shortcut_str: &str) {
                     match skills::detect_skill(&text, &skills) {
                         Some(skill_match) => {
                             log::info!("Skill detected: {}", skill_match.skill.name);
+                            analytics::track("skill_used", serde_json::json!({
+                                "skill_name": skill_match.skill.name,
+                            }));
                             (skill_match.cleaned_text, Some(skill_match.skill.system_prompt))
                         }
                         None => (text.clone(), None),
@@ -447,6 +462,10 @@ pub fn register_rewrite_hotkey(app: &tauri::AppHandle, shortcut_str: &str) {
                 match rewrite::rewrite_text(&rewrite_text_input, &config.rewrite_style, config.groq_api_key.as_deref().unwrap_or(""), Some(&state.groq_usage), custom_prompt.as_deref()) {
                     Ok(rewritten) => {
                         log::info!("Rewrite complete (multi={}, chars={}): {}", is_multi, char_count, rewritten);
+                        analytics::track("rewrite_completed", serde_json::json!({
+                            "style": format!("{:?}", config.rewrite_style),
+                            "has_skill": custom_prompt.is_some(),
+                        }));
 
                         // Select-back and replace the original injected text
                         if let Err(e) = commands::select_back_and_inject(char_count, &rewritten) {

@@ -380,6 +380,12 @@ pub fn update_settings(
     settings.save(&state.data_dir).map_err(|e| e.to_string())?;
     *state.config.write() = settings.clone();
 
+    crate::analytics::track("settings_changed", serde_json::json!({
+        "backend": format!("{:?}", settings.transcription_backend),
+        "rewrite_enabled": settings.rewrite_enabled,
+        "rewrite_style": format!("{:?}", settings.rewrite_style),
+    }));
+
     // Clear tray segment count when rewrite is toggled off
     if rewrite_was_enabled && !settings.rewrite_enabled {
         crate::tray::setup::update_tray_segment_count(&app, 0);
@@ -802,7 +808,10 @@ pub fn activate_license(
     key: String,
 ) -> Result<LicenseStatus, String> {
     license::activate_license(&key, &state.data_dir)
-        .map(|_| LicenseStatus::Licensed)
+        .map(|_| {
+            crate::analytics::track("license_activated", serde_json::json!({}));
+            LicenseStatus::Licensed
+        })
         .map_err(|e| e.to_string())
 }
 
