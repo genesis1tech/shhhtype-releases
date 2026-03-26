@@ -182,6 +182,11 @@ fn match_trigger_at_end(lower: &str, normalized: &str, trigger_lower: &str) -> O
 /// - Case-insensitive matching throughout
 pub fn detect_skill(text: &str, skills: &[Skill]) -> Option<SkillMatch> {
     let normalized = normalize_slash_word(text);
+    // Strip trailing punctuation that speech-to-text engines commonly add
+    // (e.g., Whisper transcribes "slash linkedin" as "Slash LinkedIn.")
+    let normalized = normalized
+        .trim_end_matches(|c: char| matches!(c, '.' | ',' | '!' | '?' | ';' | ':'))
+        .to_string();
     let lower = normalized.to_lowercase();
 
     for skill in skills {
@@ -928,6 +933,54 @@ mod tests {
         let m = detect_skill("hello world slash social skill", &skills).unwrap();
         assert_eq!(m.skill.name, "linkedin");
         assert_eq!(m.cleaned_text, "hello world");
+    }
+
+    #[test]
+    fn detect_with_trailing_period() {
+        let skills = vec![test_skill()];
+        let m = detect_skill("/linkedin.", &skills).unwrap();
+        assert_eq!(m.skill.name, "linkedin");
+        assert_eq!(m.cleaned_text, "");
+    }
+
+    #[test]
+    fn detect_spoken_with_trailing_period() {
+        let skills = vec![test_skill()];
+        let m = detect_skill("Slash LinkedIn.", &skills).unwrap();
+        assert_eq!(m.skill.name, "linkedin");
+        assert_eq!(m.cleaned_text, "");
+    }
+
+    #[test]
+    fn detect_skill_suffix_with_trailing_period() {
+        let skills = vec![test_skill()];
+        let m = detect_skill("/linkedin skill.", &skills).unwrap();
+        assert_eq!(m.skill.name, "linkedin");
+        assert_eq!(m.cleaned_text, "");
+    }
+
+    #[test]
+    fn detect_with_trailing_punctuation_and_content() {
+        let skills = vec![test_skill()];
+        let m = detect_skill("hello world /linkedin.", &skills).unwrap();
+        assert_eq!(m.skill.name, "linkedin");
+        assert_eq!(m.cleaned_text, "hello world");
+    }
+
+    #[test]
+    fn detect_alias_with_trailing_period() {
+        let skills = vec![test_skill()];
+        let m = detect_skill("Slash social.", &skills).unwrap();
+        assert_eq!(m.skill.name, "linkedin");
+        assert_eq!(m.cleaned_text, "");
+    }
+
+    #[test]
+    fn detect_with_trailing_question_mark() {
+        let skills = vec![test_skill()];
+        let m = detect_skill("/linkedin skill?", &skills).unwrap();
+        assert_eq!(m.skill.name, "linkedin");
+        assert_eq!(m.cleaned_text, "");
     }
 
     #[test]
