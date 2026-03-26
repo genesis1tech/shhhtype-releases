@@ -30,7 +30,7 @@ fn strip_think_tags(text: &str) -> &str {
     }
 }
 
-/// Convert a single ASCII char to its Unicode Mathematical Bold equivalent.
+/// 𝐁𝐨𝐥𝐝 𝐒𝐞𝐫𝐢𝐟 — Unicode Mathematical Bold (U+1D400)
 fn to_unicode_bold(c: char) -> char {
     match c {
         'A'..='Z' => char::from_u32(0x1D400 + (c as u32 - 'A' as u32)).unwrap_or(c),
@@ -40,16 +40,18 @@ fn to_unicode_bold(c: char) -> char {
     }
 }
 
-/// Convert a single ASCII char to its Unicode Mathematical Italic equivalent.
+/// 𝑰𝒕𝒂𝒍𝒊𝒄 𝑺𝒆𝒓𝒊𝒇 — Unicode Mathematical Italic (U+1D434)
+/// Note: U+1D455 (italic h) is unassigned; correct mapping is U+210E (ℎ PLANCK CONSTANT).
 fn to_unicode_italic(c: char) -> char {
     match c {
         'A'..='Z' => char::from_u32(0x1D434 + (c as u32 - 'A' as u32)).unwrap_or(c),
+        'h' => '\u{210E}', // PLANCK CONSTANT — the only gap in Mathematical Italic
         'a'..='z' => char::from_u32(0x1D44E + (c as u32 - 'a' as u32)).unwrap_or(c),
         _ => c,
     }
 }
 
-/// Convert a single ASCII char to its Unicode Mathematical Bold Italic equivalent.
+/// 𝑩𝒐𝒍𝒅 𝑰𝒕𝒂𝒍𝒊𝒄 𝑺𝒆𝒓𝒊𝒇 — Unicode Mathematical Bold Italic (U+1D468)
 fn to_unicode_bold_italic(c: char) -> char {
     match c {
         'A'..='Z' => char::from_u32(0x1D468 + (c as u32 - 'A' as u32)).unwrap_or(c),
@@ -59,11 +61,32 @@ fn to_unicode_bold_italic(c: char) -> char {
     }
 }
 
+/// 𝗕𝗼𝗹𝗱 𝗦𝗮𝗻𝘀-𝗦𝗲𝗿𝗶𝗳 — Unicode Mathematical Sans-Serif Bold (U+1D5D4)
+#[allow(dead_code)]
+fn to_unicode_bold_sans(c: char) -> char {
+    match c {
+        'A'..='Z' => char::from_u32(0x1D5D4 + (c as u32 - 'A' as u32)).unwrap_or(c),
+        'a'..='z' => char::from_u32(0x1D5EE + (c as u32 - 'a' as u32)).unwrap_or(c),
+        '0'..='9' => char::from_u32(0x1D7EC + (c as u32 - '0' as u32)).unwrap_or(c),
+        _ => c,
+    }
+}
+
+/// 𝘐𝘵𝘢𝘭𝘪𝘤 𝘚𝘢𝘯𝘴-𝘚𝘦𝘳𝘪𝘧 — Unicode Mathematical Sans-Serif Italic (U+1D608)
+#[allow(dead_code)]
+fn to_unicode_italic_sans(c: char) -> char {
+    match c {
+        'A'..='Z' => char::from_u32(0x1D608 + (c as u32 - 'A' as u32)).unwrap_or(c),
+        'a'..='z' => char::from_u32(0x1D622 + (c as u32 - 'a' as u32)).unwrap_or(c),
+        _ => c,
+    }
+}
+
 /// Convert markdown-style formatting to Unicode styled characters for platforms
 /// that don't support markdown (e.g. LinkedIn).
-/// - `***text***` → Unicode Bold Italic
-/// - `**text**` → Unicode Bold
-/// - `*text*` → Unicode Italic
+/// - `***text***` → 𝑩𝒐𝒍𝒅 𝑰𝒕𝒂𝒍𝒊𝒄
+/// - `**text**` → 𝐁𝐨𝐥𝐝
+/// - `*text*` → 𝐼𝑡𝑎𝑙𝑖𝑐
 fn markdown_to_unicode(text: &str) -> String {
     let mut result = String::with_capacity(text.len());
     let chars: Vec<char> = text.chars().collect();
@@ -91,7 +114,7 @@ fn markdown_to_unicode(text: &str) -> String {
                 continue;
             }
         }
-        // Check for * (italic) — but not ** which is handled above
+        // Check for * (italic)
         if chars[i] == '*' && (i + 1 >= len || chars[i + 1] != '*') {
             if let Some(content) = extract_between(&chars, i + 1, "*") {
                 for c in content.chars() {
