@@ -1110,8 +1110,11 @@ function LicenseTab() {
     }
   };
 
-  const openSubscribe = () => {
-    invoke("open_url", { url: "https://shhhtype.com" });
+  const openSubscribeMonthly = () => {
+    invoke("open_url", { url: "https://shhhtype.lemonsqueezy.com/checkout/buy/c74816d2-4704-4248-abcb-fe565d518935" });
+  };
+  const openSubscribeYearly = () => {
+    invoke("open_url", { url: "https://shhhtype.lemonsqueezy.com/checkout/buy/142cb9f5-10e6-4a7d-ab93-ec87f4ee98e6" });
   };
 
   const statusLabel =
@@ -1191,12 +1194,20 @@ function LicenseTab() {
               </div>
             )}
             {(trialInfo.expired || trialInfo.days_remaining <= 3) && (
-              <button
-                onClick={openSubscribe}
-                className="apple-button mt-3 w-full"
-              >
-                Subscribe — $15/mo or $150/yr
-              </button>
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={openSubscribeMonthly}
+                  className="apple-button flex-1"
+                >
+                  Monthly — $20/mo
+                </button>
+                <button
+                  onClick={openSubscribeYearly}
+                  className="apple-button flex-1"
+                >
+                  Annual — $200/yr
+                </button>
+              </div>
             )}
           </div>
         </SettingsGroup>
