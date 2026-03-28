@@ -65,7 +65,7 @@ fn default_vad_silence_timeout() -> f32 {
 }
 
 fn default_rewrite_hotkey() -> String {
-    "Command+Alt+R".to_string()
+    "Ctrl+Shift+R".to_string()
 }
 
 /// Transcription backend selection.

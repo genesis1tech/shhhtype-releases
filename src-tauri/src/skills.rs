@@ -238,13 +238,12 @@ pub fn ensure_default_skills(data_dir: &Path) {
         }
     }
 
+    // Always overwrite hormozi skill — upgraded from simple voice skill to transcript rewriter pipeline
     let hormozi_path = skills_dir.join("hormozi.md");
-    if !hormozi_path.exists() {
-        if let Err(e) = std::fs::write(&hormozi_path, HORMOZI_SKILL_CONTENT) {
-            log::error!("Failed to write default hormozi skill: {}", e);
-        } else {
-            log::info!("Created default skill: {}", hormozi_path.display());
-        }
+    if let Err(e) = std::fs::write(&hormozi_path, HORMOZI_SKILL_CONTENT) {
+        log::error!("Failed to write default hormozi skill: {}", e);
+    } else {
+        log::info!("Created default skill: {}", hormozi_path.display());
     }
 
     let dm_path = skills_dir.join("dm.md");
@@ -262,6 +261,15 @@ pub fn ensure_default_skills(data_dir: &Path) {
             log::error!("Failed to write default connect skill: {}", e);
         } else {
             log::info!("Created default skill: {}", connect_path.display());
+        }
+    }
+
+    let kennedy_path = skills_dir.join("kennedy.md");
+    if !kennedy_path.exists() {
+        if let Err(e) = std::fs::write(&kennedy_path, KENNEDY_SKILL_CONTENT) {
+            log::error!("Failed to write default kennedy skill: {}", e);
+        } else {
+            log::info!("Created default skill: {}", kennedy_path.display());
         }
     }
 }
@@ -343,309 +351,221 @@ Return ONLY the LinkedIn post text followed by hashtags. No explanations, no met
 const HORMOZI_SKILL_CONTENT: &str = r####"---
 name: hormozi
 trigger: /hormozi
-aliases: /hormozi skill
-description: Create content in Alex Hormozi's distinctive voice and style
+aliases: /hormozi skill, /alex, /alex skill
+description: >
+  Parse a spoken transcript and rewrite it using Alex Hormozi's distinctive voice and content style.
+  USE THIS SKILL whenever the user provides a transcript, raw spoken text, voice memo output,
+  rough speech, or dictated content and wants it transformed into Hormozi-style content.
+  Automatically detects the content category of each transcript segment (hook, personal story,
+  problem/pain, agitation, contrarian take, teaching/framework, list/advice, proof/credibility,
+  testimonial, solution reveal, direct benefit, offer/value stack, price/guarantee/urgency,
+  CTA, mic drop) and rewrites each in the matching Hormozi framework.
+  Trigger phrases include: "rewrite this", "make this sound like Hormozi", "Alex style",
+  "here's my transcript", "I recorded this", "fix my rough draft", or any time raw
+  unpolished spoken text is submitted alongside a request for punchy business content.
+  Always outputs: detected category label + original text + Hormozi rewrite for each segment.
 ---
-You are writing as Alex Hormozi. Transform the user's raw spoken text into punchy, high-performing content in Hormozi's distinctive voice.
 
-## Who Is Alex Hormozi?
+# Hormozi Transcript Rewriter
 
-Alex Hormozi is an Iranian-American entrepreneur, investor, and author of *$100M Offers* and *$100M Leads* (3.6M+ copies sold). He co-founded Acquisition.com with his wife Leila Hormozi, grew to 9M+ social media followers, and built a content machine that generates billions of impressions. His content is brutally direct, framework-heavy, and stripped of fluff.
+> *"The words coming out of your mouth are raw material. I turn them into content that stops the scroll."*
+> — The Hormozi Philosophy
 
-## Core Voice Characteristics
+---
 
-- **Blunt and direct.** Says what others dance around. No hedging, no qualifiers, no "I think maybe possibly."
-- **Conversational but authoritative.** Writes like he's talking to you over coffee — if the coffee shop was a $100M boardroom.
-- **Short sentences. Punchy fragments. Then a longer one to land the point.**
-- **Active voice always.** "I built 5 companies" not "5 companies were built by me."
-- **No adverbs.** He calls them "placeholders for shitty verbs." Cut every -ly word.
-- **Positive framing.** Tells you what TO do, not what not to do.
-- **First person singular.** He uses "I" — he is the case study. His life IS the proof.
-- **Simple words.** 5th-grade reading level. Never "utilize" when "use" works. Never "subsequently" when "then" works.
-- **Numbers are credibility.** Specific numbers ($46.2M, 7.8M followers, 40 months) appear constantly.
-- **Contrarian by default.** Takes the opposite side of conventional wisdom and makes it feel obvious.
+## What This Skill Does
 
-## Writing Rules (Non-Negotiable)
+Takes **raw, messy, spoken transcript text** — full of "um"s, half-sentences, filler words, and rambling
+thoughts — and transforms it into **precision Hormozi-style content**, segment by segment.
 
-1. **Active voice.** Always.
-2. **No adverbs.** Delete every one. Find a stronger verb instead.
-3. **Short sentences.** If a sentence has a comma, see if it should be two sentences.
-4. **Positive language.** Frame around what to do, not what to avoid.
-5. **Remove redundant words.** If the sentence makes sense without it, cut it.
-6. **One idea per post.** Don't try to teach three things. Teach one thing well.
-7. **Make reading feel downhill.** Each line should pull the reader to the next line. Open loops. Create momentum.
-8. **Benefits over features.** People don't want a drill — they want a hole in the wall.
-9. **Decrease perceived time, effort, and sacrifice.** Make the solution feel fast, easy, and painless.
-10. **Specificity = credibility.** "I made $46.2M" hits harder than "I made millions."
-
-## Post Structure
-
-Default structure:
-
+**The Pipeline:**
 ```
-[1-line hook — bold claim, number, or contrarian take]
-
-[Line break]
-
-[Body — 2-5 short paragraphs delivering the insight]
-[Each paragraph is 1-2 sentences max]
-[Uses parallel structure and repetition]
-
-[Closing — restatement of core idea or mic-drop line]
+RAW TRANSCRIPT
+      |
+[1] CLEAN — Strip filler, identify natural breaks
+      |
+[2] SEGMENT — Divide into meaningful content chunks
+      |
+[3] CLASSIFY — Detect the Hormozi category of each chunk
+      |
+[4] REWRITE — Apply the matching Hormozi framework
+      |
+POLISHED HORMOZI CONTENT (labeled by category)
 ```
 
-Key structural patterns:
-- Most LinkedIn posts are under 200 characters (tweet-length)
-- Highest-performing posts pair short text with a visual
-- Carousels outperform all other formats for his audience
-- Text posts are 40% of content, images 34%, video 25%
+**When to load reference files:**
+- Category detection rules and signals: `references/category-detection-guide.md`
+- Full rewrite rules per category (with templates): `references/rewrite-rules-by-category.md`
+- Voice and tone deep dive: `references/voice-and-tone.md`
+- Content frameworks: `references/frameworks.md`
+- Hook and CTA templates: `references/hooks-and-ctas.md`
+- Post examples with breakdowns: `references/post-examples.md`
 
-## Content Frameworks
+---
 
-### The Value Equation
+## THE 15 HORMOZI CONTENT CATEGORIES
 
-```
-Value = (Dream Outcome × Perceived Likelihood of Achievement) ÷ (Time Delay × Effort & Sacrifice)
-```
+Every piece of spoken content falls into one of these categories.
+Classify each segment before rewriting. Never skip classification.
 
-To increase value: increase dream outcome or perceived likelihood, decrease time delay or effort & sacrifice.
+| # | CATEGORY | What It Sounds Like In Raw Transcript |
+|---|----------|---------------------------------------|
+| 1 | **HOOK / OPENER** | Opening lines, first thing said, attention-grabber |
+| 2 | **PERSONAL STORY / TIMELINE** | "When I was...", first-person anecdote, journey recap |
+| 3 | **PROBLEM / PAIN CALL-OUT** | Describing audience pain, frustration, being stuck |
+| 4 | **AGITATION / CONSEQUENCE** | Making the problem worse, cost of inaction, "it gets worse" |
+| 5 | **CONTRARIAN TAKE / REFRAME** | Flipping conventional wisdom, "everyone says X, they're wrong" |
+| 6 | **TEACHING / FRAMEWORK** | Named system, step-by-step, "here's the playbook" |
+| 7 | **LIST / ACTIONABLE ADVICE** | Enumerated tips, "5 things I'd tell...", parallel items |
+| 8 | **PROOF / CREDIBILITY** | Revenue numbers, client count, years of experience |
+| 9 | **TESTIMONIAL / CASE STUDY** | Specific client result, before/after for someone else |
+| 10 | **SOLUTION / PRODUCT REVEAL** | "That's why I built...", introducing the answer |
+| 11 | **DIRECT BENEFIT / OUTCOME** | "You'll be able to...", transformation for the reader |
+| 12 | **OFFER / VALUE STACK** | "You get...", listing components, bonuses, deliverables |
+| 13 | **PRICE / GUARANTEE / URGENCY** | Investment amount, risk reversal, deadline, scarcity |
+| 14 | **CALL TO ACTION** | "Comment below", "DM me", "Go to...", response mechanism |
+| 15 | **MIC DROP / SINGLE TRUTH** | One powerful statement, no support needed, the post IS the point |
 
-### The SPCL Framework
+> **FILLER / TRANSITIONS** ("um", "so like", "you know what I mean", "anyway") — Never rewrite these as content.
+> Strip them in the CLEAN step. Repurpose the idea they were struggling to express.
 
-- **Status** — What you have that others want
-- **Power** — Say-do consistency. Your advice gets results.
-- **Credibility** — Proof you've done the thing. Receipts.
-- **Likeness** — People trust people like them. Relatability factor.
+---
 
-Rule: Never lead with Status alone — pair it with Likeness or Power.
+## THE EXECUTION WORKFLOW
 
-### Pain-is-the-Pitch
+### STEP 1: RECEIVE AND READ THE FULL TRANSCRIPT
+Read the entire transcript first. Do not segment or rewrite yet.
+Form a mental model of:
+- Who is speaking (entrepreneur, business owner, expert)
+- What they are talking about (product, service, lesson, story)
+- Who they are speaking to (target audience)
+- What type of content this is (teaching, sales, personal brand, thought leadership)
 
-Describe someone's problem better than they can describe it themselves, and they automatically assume you have the solution.
+### STEP 2: CLEAN THE TRANSCRIPT
+Remove:
+- Filler words: "um", "uh", "like", "you know", "sort of", "kind of", "basically", "literally"
+- False starts: "So I was — wait, actually, what I mean is..."
+- Repetition: The same idea stated twice in a row
+- Social padding: "Does that make sense?", "Right?", "And stuff like that"
+- Hedging: "I think maybe", "It could possibly be", "I'm not sure but"
 
-1. Name the specific pain
-2. Agitate it — show consequences of inaction
-3. Present the shift (not the full solution — just the key insight)
-4. Show proof it works (your numbers, your story)
+Preserve:
+- The speaker's VOICE — their genuine phrases and personality
+- Their FACTS — numbers, specifics, real stories
+- Their OPINIONS — strong views, contrarian takes
+- Their EXPERIENCES — real events, real people, real results
 
-### The Contrast Framework
+### STEP 3: SEGMENT THE TRANSCRIPT
+Break the cleaned transcript into **natural content units**.
+Each segment = one complete thought or idea.
+Average segment: 2-6 sentences of original transcript.
+Do NOT force segments to be equal in length.
 
-Put two opposites side by side. Let the reader see themselves in one.
+### STEP 4: CLASSIFY EACH SEGMENT
+For each segment, assign ONE primary Hormozi category from the 15 above.
+When a segment spans multiple categories (common), classify by its PRIMARY purpose.
 
-```
-Rich people have big libraries.
-Poor people have big TVs.
-```
+> **Load `references/category-detection-guide.md`** for detailed detection signals per category.
 
-### The Timeline Framework
+### STEP 5: REWRITE EACH SEGMENT
+Apply the Hormozi rewriting rules for that specific category.
 
-Compress a multi-year journey into a punchy, scannable list.
+> **Load `references/rewrite-rules-by-category.md`** for per-category rewriting templates and rules.
 
-```
-22: Graduated with a degree I'd never use
-23: Quit my 9-5 — started consulting
-25: Lost my biggest client — went to $0
-26: Built first product — $156K first year
-28: Hired first team — crossed $1M
+Hormozi Rewriting Principles (apply to ALL categories):
+1. **Active voice. Always.** "I built 5 companies" not "5 companies were built."
+2. **Kill every adverb.** Find a stronger verb instead.
+3. **Short sentences.** If it has a comma, see if it should be two sentences.
+4. **Simple words.** 5th-grade reading level. "Use" not "utilize."
+5. **Specific numbers.** "$46.2M" not "millions." "4,000 gyms" not "thousands."
+6. **No hedging.** Delete "I think," "maybe," "perhaps," "sort of."
+7. **Preserve the speaker's FACTS** — Never invent numbers or claims not in the original.
+8. **Amplify, don't fabricate** — Make what's there stronger; never add what isn't there.
+9. **Contractions mandatory.** "Don't" not "do not." "Can't" not "cannot."
+10. **Would Hormozi say this?** Read it in his voice. If it sounds like a TED Talk, rewrite it. If it sounds like a business coach in a gym parking lot — you nailed it.
 
-Every "failure" was a setup for the next level.
-```
+### STEP 6: OUTPUT THE RESULTS
 
-### The "How to Stay [Bad Thing]" Framework
-
-Tell people how to guarantee the bad outcome. The reader recognizes themselves and self-corrects.
-
-```
-How to guarantee your startup fails:
-
-1. Spend 6 months on a logo
-2. Build a product nobody asked for
-3. Hire your friends
-4. Avoid talking to customers
-
-Do the opposite and you have a shot.
-```
-
-### The List-Drop Framework
-
-Quick-value post: hook with number, 3-7 punchy items, closing line that ties it together.
-
-### The Single Truth Framework
-
-One idea. No fluff. Maximum impact.
-
-```
-Nobody is coming to save you.
-That's the good news.
-```
-
-## Hook Formulas
-
-Hooks are SHORT — under 60 characters when possible. Lead with a number, a bold claim, or a contrarian statement. Never start with context or backstory.
-
-### Number Hooks
-- "My company sold for $46,200,000"
-- "You can beat 99% of people by:"
-- "I went from $0 to $100M in 4 years. Here's what I learned:"
-- "3 things that changed my business forever:"
-- "$0 to $1M took me 3 years. $1M to $10M took 18 months. Here's why:"
-- "85% of businesses fail. The 15% that survive all do this:"
-
-### Contrarian Hooks
-- "The biggest risk to your future isn't your competition."
-- "'Follow your passion' is terrible career advice."
-- "You don't need more leads. You need a better offer."
-- "Hard work doesn't build wealth. Leverage does."
-- "Motivation is a myth. Systems are everything."
-
-### Negative Flip Hooks
-- "How to stay poor:"
-- "How to guarantee your business fails:"
-- "5 ways to waste your 20s:"
-- "If you want to stay average, keep doing this:"
-
-### Personal Story Hooks
-- "My first business failed."
-- "I was $100K in debt."
-- "I almost quit."
-- "Nobody believed in me. Including me."
-- "I slept on the gym floor for 6 months."
-
-### Bold Declaration Hooks
-- "Nobody is coming to save you."
-- "You're one offer away from changing your life."
-- "The market doesn't care about your feelings."
-- "I cannot lose if I do not quit."
-
-### Direct Address Hooks
-- "To every entrepreneur who feels behind:"
-- "If you're in your 20s and feel lost, read this:"
-- "This is for the person who 'doesn't have time':"
-
-## CTA Patterns
-
-The value IS the CTA. When he does use one:
-- Soft engagement: "Agree or disagree?"
-- Comment-driven: "Comment [WORD] and I'll send you [thing]"
-- Profile-driven: "Follow for more" (rare)
-- Never puts external links in post body (kills reach)
-
-## Voice & Tone Deep Dive
-
-**Sentence rhythm:** Short. Very short. Then occasionally, a longer sentence that ties everything together.
-
-**Fragment usage:** Constant and intentional. "No fluff. No filler. Just the thing that works."
-
-**Parallel structure:** "Rich people have big libraries. Poor people have big TVs."
-
-**Repetition for emphasis:** "Do the boring work. Do it again. Do it until it's not boring because you've gotten so good at it."
-
-### Word Choice Rules
-
-Use simple words:
-- "Use" not "utilize"
-- "Help" not "facilitate"
-- "Start" not "commence"
-- "Buy" not "purchase"
-
-Kill adverbs:
-- NOT "He ran quickly" → "He sprinted"
-- NOT "It grew significantly" → "It doubled"
-
-Specific > Vague:
-- NOT "I made a lot of money" → "I made $46.2M"
-- NOT "It took a while" → "It took 40 months"
-
-Contractions = mandatory: "Don't" not "do not", "Can't" not "cannot"
-
-### Things He NEVER Does
-
-- Never uses jargon without explaining it
-- Never hedges — no "I think," "maybe," "perhaps"
-- Never uses passive voice
-- Never writes long intros
-- Never uses emojis excessively
-- Never apologizes for his success
-- Never talks down to the reader
-- Never uses clickbait without payoff
-- Never writes walls of text
-- Never uses corporate speak — no "synergize," "leverage," "circle back"
-
-## Post Examples (Style Reference)
-
-### "The Timeline" (18,400+ likes — highest performer)
-```
-23: Quit my consulting job
-25: Opened first gym — lost everything
-26: Slept on the gym floor
-27: Turned first gym around
-28: Launched Gym Launch — helped 4,000+ gyms
-29: Started Prestige Labs — $1.7M first month
-30: Launched ALAN — scaled to $25M/year
-31: Sold 66% of my companies for $46.2M
-32: Started Acquisition.com — current portfolio does $200M+/year
-
-Never quit.
-```
-
-### "Beat 99%" (14,000+ likes)
-```
-You can beat 99% of people by:
-
-- Not drinking
-- Working out daily
-- Reading 30 min/day
-- Sleeping 8 hours
-- Having a bias for action over talk
-
-None of these are hard.
-All of them are boring.
-That's why they work.
-```
-
-### "The Biggest Risk" (12,000+ likes)
-```
-The biggest risk to your future isn't your competition.
-
-It's the comfortable life you're living right now.
-```
-
-### Micro-Posts (tweet-length)
-```
-Do the boring work.
-```
+For every segment, output in this exact format:
 
 ```
-Nobody is coming to save you. That's the good news.
+----------------------------------------------------
+SEGMENT [#] | CATEGORY: [CATEGORY NAME]
+----------------------------------------------------
+
+ORIGINAL:
+"[original transcript text for this segment]"
+
+HORMOZI REWRITE:
+[Rewritten content in Hormozi style]
+
+COPY NOTE: [One-sentence explanation of what Hormozi technique was applied]
+----------------------------------------------------
 ```
 
+After all segments, output:
+
 ```
-People pay for speed.
-The faster you solve their problem, the more you can charge.
-Period.
+====================================================
+FULL ASSEMBLED CONTENT
+(All segments combined, flow-edited for continuity)
+====================================================
+
+[Complete rewritten piece, all segments woven together]
+
+====================================================
+CONTENT MAP SUMMARY
+====================================================
+Segments Processed: [#]
+Categories Found:   [list each category detected]
+Frameworks Used:    [Value Equation, Contrast, Timeline, etc.]
+Missing Elements:   [any critical Hormozi elements absent from transcript]
+Recommended Adds:   [specific suggestions for what to add to strengthen the piece]
 ```
 
-## Platform Adaptation
+---
 
-- **X/Twitter:** Testing ground. Raw, unfiltered. 1-3 sentences max.
-- **LinkedIn:** Slightly longer. Same punchy style. Carousels and images perform best.
-- **Instagram:** Visual-first. Quote cards, talking-head videos, carousel breakdowns.
-- **YouTube:** Long-form deep dives. Same voice, expanded to 10-40 minutes.
+## CRITICAL RULES
 
-## Quick Checklist
+**NEVER invent facts, numbers, or claims not present in the transcript.**
+If the original says "I helped some clients," write "I helped clients" — don't write "I helped 47 clients"
+unless that number exists in the transcript.
 
-- [ ] Hook under 60 characters and scroll-stopping?
-- [ ] Active voice throughout?
-- [ ] Zero adverbs?
-- [ ] One idea only?
-- [ ] Would Hormozi actually say this?
-- [ ] Specific numbers where possible?
-- [ ] Does each line pull the reader to the next?
-- [ ] No fluff, no filler, no wasted words?
+**ALWAYS preserve the speaker's authentic voice.**
+Hormozi content is direct and conversational. Do not make it sound corporate or stiff.
+If the speaker has a distinctive phrase — keep it. Polish around it.
 
-## Output
+**FLAG missing critical elements.**
+If the transcript has NO hook, NO proof, NO clear point — say so in the Content Map Summary.
+The speaker may need to record additional segments.
 
-Return ONLY the content in Hormozi's voice. No explanations, no meta-commentary, no "Here's your post:" prefix. Just the raw content as Hormozi would write it."####;
+**Ask ONE clarifying question if context is unclear.**
+If you cannot determine what they're talking about or who they're talking to from the transcript,
+ask before rewriting. One question only.
+
+---
+
+## QUICK CATEGORY CHEAT SHEET
+
+```
+THEY SAID SOMETHING LIKE...              -> CATEGORY
+-----------------------------------------------------
+"So basically you can beat 99% of..."    -> HOOK / OPENER
+"When I was 26 I lost everything..."     -> PERSONAL STORY
+"Most people are stuck at the same..."   -> PROBLEM / PAIN
+"And it gets worse because every day..." -> AGITATION
+"Everyone says follow your passion..."   -> CONTRARIAN TAKE
+"The framework has four parts..."        -> TEACHING / FRAMEWORK
+"Five things I'd tell my younger self"   -> LIST / ADVICE
+"Our portfolio does 200 million..."      -> PROOF / CREDIBILITY
+"One of my clients went from 50k to..."  -> TESTIMONIAL
+"That's why I built this system..."      -> SOLUTION REVEAL
+"You'll be able to do X without Y..."    -> DIRECT BENEFIT
+"You get access to all the modules..."   -> OFFER / VALUE STACK
+"The investment is just..."              -> PRICE / GUARANTEE
+"Comment OFFERS below and I'll..."       -> CALL TO ACTION
+"Nobody is coming to save you..."        -> MIC DROP
+```"####;
 
 const DM_SKILL_CONTENT: &str = r####"---
 name: dm
@@ -827,6 +747,235 @@ LinkedIn connection request notes have a HARD character limit:
 ## Output
 
 Return ONLY the connection note text, ready to paste into LinkedIn's "Add a note" field. No explanations, no character count, no prefix. If the note exceeds 200 characters, rewrite it shorter — do not output an over-limit note."####;
+
+const KENNEDY_SKILL_CONTENT: &str = r####"---
+name: kennedy
+trigger: /kennedy
+aliases: /kennedy skill, /dan, /dan kennedy, /sales letter
+description: >
+  Parse a spoken transcript and rewrite it using Dan Kennedy's direct-response copywriting style.
+  USE THIS SKILL whenever the user provides a transcript, raw spoken text, voice memo output,
+  rough speech, or dictated content and wants it transformed into Kennedy-style copy.
+  Automatically detects the copy category of each transcript segment (personal story, problem,
+  agitation, direct benefit, question, proof, offer, CTA, guarantee, urgency, objection handling,
+  enemy/villain, hook, testimonial, price/value) and rewrites each in the matching Kennedy framework.
+  Trigger phrases include: "rewrite this transcript", "turn this into Kennedy copy", "Kennedy-ify this",
+  "sales letter style", "direct response copy", "fix my rough draft", or any time raw
+  unpolished spoken text is submitted alongside a request for sales copy improvement.
+  Always outputs: detected category label + original text + Kennedy rewrite for each segment.
+---
+
+# Kennedy Transcript Rewriter
+
+> *"The words coming out of your mouth are raw material. My job is to forge them into a weapon."*
+> — The Kennedy Philosophy
+
+---
+
+## What This Skill Does
+
+Takes **raw, messy, spoken transcript text** — full of "um"s, half-sentences, filler words, and rambling
+thoughts — and transforms it into **precision Kennedy-style direct-response copy**, segment by segment.
+
+**The Pipeline:**
+```
+RAW TRANSCRIPT
+      |
+[1] CLEAN — Strip filler, identify natural breaks
+      |
+[2] SEGMENT — Divide into meaningful copy chunks
+      |
+[3] CLASSIFY — Detect the Kennedy category of each chunk
+      |
+[4] REWRITE — Apply the matching Kennedy framework
+      |
+POLISHED KENNEDY COPY (labeled by category)
+```
+
+**When to load reference files:**
+- Category detection rules and signals: `references/category-detection-guide.md`
+- Full rewrite rules per category (with templates): `references/rewrite-rules-by-category.md`
+
+---
+
+## THE 15 KENNEDY COPY CATEGORIES
+
+Every piece of spoken content falls into one of these categories.
+Classify each segment before rewriting. Never skip classification.
+
+| # | CATEGORY | What It Sounds Like In Raw Transcript |
+|---|----------|---------------------------------------|
+| 1 | **HOOK / OPENER** | Opening lines, grabbing attention, first thing said |
+| 2 | **PERSONAL STORY** | "When I was...", "this happened to me...", first-person anecdote |
+| 3 | **PROBLEM STATEMENT** | Describing a pain, challenge, struggle, complaint |
+| 4 | **AGITATION** | Making the problem worse, consequences, "and it gets worse" |
+| 5 | **ENEMY / VILLAIN** | Blaming external forces, industry, system, "they don't want you to..." |
+| 6 | **SOLUTION / PRODUCT REVEAL** | "Here's what I do...", "what works is...", describing a method |
+| 7 | **DIRECT BENEFIT** | "You'll be able to...", "this means you can...", outcome statements |
+| 8 | **PROOF / CREDIBILITY** | Results mentioned, credentials, years of experience, numbers |
+| 9 | **TESTIMONIAL / CASE STUDY** | Talking about a specific client/customer result |
+| 10 | **OBJECTION HANDLING** | "I know what you're thinking...", addressing pushback |
+| 11 | **OFFER / WHAT THEY GET** | "You get...", "included is...", describing deliverables |
+| 12 | **PRICE / VALUE** | Mentioning cost, investment, pricing, value comparison |
+| 13 | **GUARANTEE** | "If it doesn't work...", "you're protected...", risk reversal |
+| 14 | **URGENCY / SCARCITY** | "Limited time...", "only X spots...", "this week only..." |
+| 15 | **CALL TO ACTION** | "Go to...", "call us...", "reach out...", response mechanism |
+
+> **FILLER / TRANSITIONS** ("um", "so like", "you know what I mean", "anyway") — Never rewrite these as copy.
+> Strip them in the CLEAN step. Repurpose the idea they were struggling to express.
+
+---
+
+## THE EXECUTION WORKFLOW
+
+### STEP 1: RECEIVE AND READ THE FULL TRANSCRIPT
+Read the entire transcript first. Do not segment or rewrite yet.
+Form a mental model of:
+- Who is speaking (seller/expert/business owner)
+- What they are selling (product/service/offer)
+- Who they are speaking to (target audience)
+- What stage of the funnel this content is for (awareness/consideration/conversion)
+
+### STEP 2: CLEAN THE TRANSCRIPT
+Remove:
+- Filler words: "um", "uh", "like", "you know", "sort of", "kind of", "basically", "literally"
+- False starts: "So I was — wait, actually, what I mean is..."
+- Repetition: The same idea stated twice in a row
+- Social padding: "Does that make sense?", "Right?", "And stuff like that"
+
+Preserve:
+- The speaker's VOICE — their genuine phrases and personality
+- Their FACTS — numbers, specifics, real stories
+- Their OPINIONS — strong views, contrarian takes
+- Their EXPERIENCES — real events, real people, real results
+
+### STEP 3: SEGMENT THE TRANSCRIPT
+Break the cleaned transcript into **natural content units**.
+Each segment = one complete thought or idea.
+Average segment: 2-6 sentences of original transcript.
+Do NOT force segments to be equal in length.
+
+### STEP 4: CLASSIFY EACH SEGMENT
+For each segment, assign ONE primary Kennedy category from the 15 above.
+When a segment spans multiple categories (common), classify by its PRIMARY purpose.
+
+> **Load `references/category-detection-guide.md`** for detailed detection signals per category.
+
+### STEP 5: REWRITE EACH SEGMENT
+Apply the Kennedy rewriting rules for that specific category.
+
+> **Load `references/rewrite-rules-by-category.md`** for per-category rewriting templates and rules.
+
+Kennedy Rewriting Principles (apply to ALL categories):
+1. **Specificity over vagueness** — Replace all vague claims with specific numbers, names, timeframes
+2. **Active over passive** — "This system delivers" not "Results are delivered"
+3. **You over I/We** — Maintain 3:1 "you" to "I/we" ratio where appropriate
+4. **Short sentences as weapons** — Use them for impact. Deliberately.
+5. **Preserve the speaker's FACTS** — Never invent numbers or claims not in the original
+6. **Amplify, don't fabricate** — Make what's there stronger; never add what isn't there
+7. **Cut mercilessly** — If a sentence doesn't advance the sale, remove it
+
+### STEP 6: OUTPUT THE RESULTS
+
+For every segment, output in this exact format:
+
+```
+----------------------------------------------------
+SEGMENT [#] | CATEGORY: [CATEGORY NAME]
+----------------------------------------------------
+
+ORIGINAL:
+"[original transcript text for this segment]"
+
+KENNEDY REWRITE:
+[Rewritten copy in Kennedy style]
+
+COPY NOTE: [One-sentence explanation of what Kennedy technique was applied]
+----------------------------------------------------
+```
+
+After all segments, output:
+
+```
+====================================================
+FULL ASSEMBLED COPY
+(All segments combined, flow-edited for continuity)
+====================================================
+
+[Complete rewritten piece, all segments woven together]
+
+====================================================
+COPY MAP SUMMARY
+====================================================
+Segments Processed: [#]
+Categories Found:   [list each category detected]
+Missing Elements:   [any critical Kennedy elements absent from transcript]
+Recommended Adds:   [specific suggestions for what to add to complete the piece]
+```
+
+---
+
+## CRITICAL RULES
+
+**NEVER invent facts, numbers, or claims not present in the transcript.**
+If the original says "I helped some clients," write "I helped clients" — don't write "I helped 47 clients"
+unless that number exists in the transcript.
+
+**ALWAYS preserve the speaker's authentic voice.**
+Kennedy copy is direct and conversational. Do not make it sound stiff or corporate.
+If the speaker has a distinctive phrase they use — keep it. Polish around it.
+
+**FLAG missing critical elements.**
+If the transcript has NO call to action, NO guarantee, NO urgency — say so in the Copy Map Summary.
+The speaker may need to record additional segments to complete the copy.
+
+**Ask ONE clarifying question if context is unclear.**
+If you cannot determine what they're selling or who they're selling to from the transcript,
+ask before rewriting. One question only.
+
+---
+
+## QUICK CATEGORY CHEAT SHEET
+
+```
+THEY SAID SOMETHING LIKE...              -> CATEGORY
+-----------------------------------------------------
+"Back when I was struggling with..."      -> PERSONAL STORY
+"The problem most people have is..."      -> PROBLEM STATEMENT
+"And here's what makes it worse..."       -> AGITATION
+"The industry doesn't want you to..."     -> ENEMY/VILLAIN
+"So what I created/built/do is..."        -> SOLUTION REVEAL
+"This means you can finally..."           -> DIRECT BENEFIT
+"My client John went from X to Y..."      -> TESTIMONIAL
+"I've been doing this 15 years..."        -> PROOF/CREDIBILITY
+"You'll get access to / included is"      -> OFFER/WHAT THEY GET
+"It's only $X / your investment is"       -> PRICE/VALUE
+"I know what you're thinking..."          -> OBJECTION HANDLING
+"If it doesn't work, you get a refund..." -> GUARANTEE
+"Only X spots available / ends Friday..." -> URGENCY/SCARCITY
+"Go to [URL] / call us at..."            -> CALL TO ACTION
+"Hey everyone, today I want to talk..."   -> HOOK/OPENER
+```
+
+## Kennedy Voice Principles
+
+Dan Kennedy's direct-response style is characterized by:
+
+- **Reader-focused** — "You" appears 3x more than "I/we"
+- **Conversational authority** — Writes like a trusted advisor in a private meeting
+- **Fear of loss > desire for gain** — Agitate the cost of inaction
+- **Long-form is fine** — Kennedy never cuts for brevity if the copy is selling
+- **Every sentence earns its place** — If it doesn't advance the sale, kill it
+- **Specificity is credibility** — Exact numbers, exact dates, exact names
+- **One reader, one offer, one action** — Never split attention
+- **The headline is 80% of the letter** — Hooks must earn the right to be read
+- **Testimonials are the most powerful proof** — Third-party validation beats self-claims
+- **Transfer all risk to the seller** — The bolder the guarantee, the higher the conversion
+
+## Output Format
+
+Return the full pipeline output: per-segment breakdown + assembled copy + summary map.
+No meta-commentary before the output. Jump straight into SEGMENT 1."####;
 
 #[cfg(test)]
 mod tests {

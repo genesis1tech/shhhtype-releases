@@ -965,8 +965,11 @@ function SkillsTab({ settings, save }: { settings: import("../lib/types").Settin
   }, []);
 
   const linkedinSkills = skills.filter((s) => ["linkedin", "dm", "connect"].includes(s.name));
-  const creatorStyles = skills.filter((s) => ["hormozi"].includes(s.name));
-  const otherSkills = skills.filter((s) => !["linkedin", "dm", "connect", "hormozi"].includes(s.name));
+  const creatorStyleOrder = ["kennedy", "hormozi"];
+  const creatorStyles = skills
+    .filter((s) => creatorStyleOrder.includes(s.name))
+    .sort((a, b) => creatorStyleOrder.indexOf(a.name) - creatorStyleOrder.indexOf(b.name));
+  const otherSkills = skills.filter((s) => !["linkedin", "dm", "connect", "hormozi", "kennedy"].includes(s.name));
 
   const renderSkill = (skill: SkillInfo) => (
     <div key={skill.name} className="settings-row" style={{ flexDirection: "column", alignItems: "flex-start", gap: "4px" }}>
