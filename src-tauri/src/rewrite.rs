@@ -204,35 +204,67 @@ fn system_prompt(style: &RewriteStyle) -> &'static str {
     }
 }
 
-/// Rewrite text using Groq (Qwen3 32B for all rewrites — fast and capable).
+/// Rewrite text using Groq (Llama 3.3 70B primary, Qwen3 32B fallback on rate limit).
 pub fn rewrite_text(text: &str, style: &RewriteStyle, api_key: &str, usage: Option<&Mutex<GroqUsage>>, custom_prompt: Option<&str>, formatting: bool) -> Result<String> {
     let prompt = custom_prompt.unwrap_or_else(|| system_prompt(style));
-    let model = "qwen/qwen3-32b";
-    let body = serde_json::json!({
-        "model": model,
-        "messages": [
-            { "role": "system", "content": prompt },
-            { "role": "user", "content": text }
-        ],
-        "temperature": 0.3,
-        "max_tokens": 2048,
-    });
+    let primary_model = "llama-3.3-70b-versatile";
+    let fallback_model = "qwen/qwen3-32b";
 
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()?;
 
-    let resp = client
-        .post(GROQ_CHAT_URL)
-        .header("Authorization", format!("Bearer {}", api_key))
-        .header("Content-Type", "application/json")
-        .json(&body)
-        .send()?;
+    let (resp, model_used) = {
+        let body = serde_json::json!({
+            "model": primary_model,
+            "messages": [
+                { "role": "system", "content": prompt },
+                { "role": "user", "content": text }
+            ],
+            "temperature": 0.3,
+            "max_tokens": 2048,
+        });
+
+        let resp = client
+            .post(GROQ_CHAT_URL)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()?;
+
+        if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            // Update usage from the 429 response — headers still carry valid rate limit info
+            if let Some(usage) = usage {
+                crate::state::update_groq_usage(resp.headers(), usage);
+            }
+            log::warn!("Groq rate limit hit for {}, falling back to {}", primary_model, fallback_model);
+            let fallback_body = serde_json::json!({
+                "model": fallback_model,
+                "messages": [
+                    { "role": "system", "content": prompt },
+                    { "role": "user", "content": text }
+                ],
+                "temperature": 0.3,
+                "max_tokens": 2048,
+            });
+
+            let fallback_resp = client
+                .post(GROQ_CHAT_URL)
+                .header("Authorization", format!("Bearer {}", api_key))
+                .header("Content-Type", "application/json")
+                .json(&fallback_body)
+                .send()?;
+
+            (fallback_resp, fallback_model)
+        } else {
+            (resp, primary_model)
+        }
+    };
 
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().unwrap_or_default();
-        return Err(anyhow!("Groq API error {}: {}", status, body));
+        return Err(anyhow!("Groq API error {} (model: {}): {}", status, model_used, body));
     }
 
     if let Some(usage) = usage {
