@@ -131,6 +131,45 @@ fn markdown_to_unicode(text: &str) -> String {
     result
 }
 
+/// Strip markdown bold/italic markers, returning plain text.
+fn strip_markdown(text: &str) -> String {
+    let mut result = String::with_capacity(text.len());
+    let chars: Vec<char> = text.chars().collect();
+    let len = chars.len();
+    let mut i = 0;
+
+    while i < len {
+        // Check for *** (bold italic)
+        if i + 2 < len && chars[i] == '*' && chars[i + 1] == '*' && chars[i + 2] == '*' {
+            if let Some(content) = extract_between(&chars, i + 3, "***") {
+                result.push_str(&content);
+                i += 3 + content.len() + 3;
+                continue;
+            }
+        }
+        // Check for ** (bold)
+        if i + 1 < len && chars[i] == '*' && chars[i + 1] == '*' {
+            if let Some(content) = extract_between(&chars, i + 2, "**") {
+                result.push_str(&content);
+                i += 2 + content.len() + 2;
+                continue;
+            }
+        }
+        // Check for * (italic)
+        if chars[i] == '*' && (i + 1 >= len || chars[i + 1] != '*') {
+            if let Some(content) = extract_between(&chars, i + 1, "*") {
+                result.push_str(&content);
+                i += 1 + content.len() + 1;
+                continue;
+            }
+        }
+        result.push(chars[i]);
+        i += 1;
+    }
+
+    result
+}
+
 /// Extract text between the current position and the next occurrence of the closing delimiter.
 fn extract_between(chars: &[char], start: usize, delim: &str) -> Option<String> {
     let delim_chars: Vec<char> = delim.chars().collect();
@@ -214,6 +253,9 @@ pub fn rewrite_text(text: &str, style: &RewriteStyle, api_key: &str, usage: Opti
     // Convert markdown bold/italic to Unicode for skill rewrites (e.g. LinkedIn)
     let final_content = if custom_prompt.is_some() && formatting {
         markdown_to_unicode(&content)
+    } else if custom_prompt.is_some() {
+        // Formatting disabled — strip markdown markers, return plain text
+        strip_markdown(&content)
     } else {
         content
     };

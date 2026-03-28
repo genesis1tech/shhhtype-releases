@@ -45,7 +45,7 @@ const SIDEBAR_TABS: { id: Tab; label: string; color: string }[] = [
   { id: "general", label: "General", color: "#8E8E93" },
   { id: "audio", label: "Audio", color: "#AF52DE" },
   { id: "dictionary", label: "Dictionary", color: "#FF9500" },
-  { id: "skills", label: "Skills", color: "#FF2D55" },
+  { id: "skills", label: "AI Rewrite & Skills", color: "#FF2D55" },
   { id: "history", label: "History", color: "#34C759" },
   { id: "license", label: "License", color: "#FFCC00" },
   { id: "about", label: "About", color: "#007AFF" },
@@ -679,43 +679,6 @@ function GeneralTab({
         </SettingsRow>
       </SettingsGroup>
 
-      {/* AI REWRITE */}
-      <SettingsGroup title="AI Rewrite">
-        <SettingsRow
-          label="Enable"
-          description={`Press ${settings.rewrite_hotkey} to polish text with AI`}
-        >
-          <input
-            type="checkbox"
-            className="apple-toggle"
-            checked={settings.rewrite_enabled}
-            onChange={(e) =>
-              save({ ...settings, rewrite_enabled: e.target.checked })
-            }
-          />
-        </SettingsRow>
-
-        {settings.rewrite_enabled && (
-          <SettingsRow label="Style">
-            <select
-              className="apple-select"
-              value={settings.rewrite_style}
-              onChange={(e) =>
-                save({
-                  ...settings,
-                  rewrite_style: e.target.value as RewriteStyle,
-                })
-              }
-            >
-              <option value="Professional">Professional</option>
-              <option value="Casual">Casual</option>
-              <option value="Concise">Concise</option>
-              <option value="Friendly">Friendly</option>
-            </select>
-          </SettingsRow>
-        )}
-      </SettingsGroup>
-
       {/* SYSTEM */}
       <SettingsGroup title="System">
         <SettingsRow
@@ -989,7 +952,7 @@ function GroqUsageCard() {
   );
 }
 
-/** Skills tab — shows all loaded voice-triggered skills. */
+/** AI Rewrite & Skills tab — AI rewrite settings plus voice-triggered skills. */
 function SkillsTab({ settings, save }: { settings: import("../lib/types").Settings; save: (s: import("../lib/types").Settings) => void }) {
   const [skills, setSkills] = useState<SkillInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1000,10 +963,6 @@ function SkillsTab({ settings, save }: { settings: import("../lib/types").Settin
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
-
-  if (loading) {
-    return <div className="p-4 text-sm text-[var(--text-secondary)]">Loading skills...</div>;
-  }
 
   const linkedinSkills = skills.filter((s) => ["linkedin", "dm", "connect"].includes(s.name));
   const creatorStyles = skills.filter((s) => ["hormozi"].includes(s.name));
@@ -1035,11 +994,42 @@ function SkillsTab({ settings, save }: { settings: import("../lib/types").Settin
 
   return (
     <div>
-      <p className="text-xs text-[var(--text-secondary)] px-3 mb-4">
-        Say the trigger command at the start or end of your recording to activate a skill.
-        You can also say "slash" instead of typing "/".
-      </p>
-      <SettingsGroup title="Options">
+      {/* AI Rewrite section */}
+      <SettingsGroup title="AI Rewrite">
+        <SettingsRow
+          label="Enable"
+          description={`Press ${settings.rewrite_hotkey} to polish text with AI`}
+        >
+          <input
+            type="checkbox"
+            className="apple-toggle"
+            checked={settings.rewrite_enabled}
+            onChange={(e) =>
+              save({ ...settings, rewrite_enabled: e.target.checked })
+            }
+          />
+        </SettingsRow>
+
+        {settings.rewrite_enabled && (
+          <SettingsRow label="Style">
+            <select
+              className="apple-select"
+              value={settings.rewrite_style}
+              onChange={(e) =>
+                save({
+                  ...settings,
+                  rewrite_style: e.target.value as RewriteStyle,
+                })
+              }
+            >
+              <option value="Professional">Professional</option>
+              <option value="Casual">Casual</option>
+              <option value="Concise">Concise</option>
+              <option value="Friendly">Friendly</option>
+            </select>
+          </SettingsRow>
+        )}
+
         <SettingsRow
           label="Text Formatting"
           description="Apply bold/italic Unicode styling to skill output"
@@ -1054,13 +1044,19 @@ function SkillsTab({ settings, save }: { settings: import("../lib/types").Settin
           />
         </SettingsRow>
       </SettingsGroup>
-      {skills.length === 0 ? (
+
+      {/* Skills section */}
+      <p className="text-xs text-[var(--text-secondary)] px-3 mb-4">
+        Say the trigger command at the start or end of your recording to activate a skill.
+        You can also say "slash" instead of typing "/".
+      </p>
+      {!loading && skills.length === 0 ? (
         <SettingsGroup>
           <div className="px-3 py-4 text-sm text-[var(--text-secondary)]">
             No skills loaded. Skills are loaded from .md files in the skills directory.
           </div>
         </SettingsGroup>
-      ) : (
+      ) : !loading && (
         <>
           {linkedinSkills.length > 0 && (
             <SettingsGroup title="LinkedIn">
