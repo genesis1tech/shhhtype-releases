@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Separate repos (have their own repositories)
+shhhtype-web-rebuild/
+voice2txt/
+shhhtype/
+documentation/
