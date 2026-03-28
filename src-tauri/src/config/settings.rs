@@ -51,6 +51,13 @@ pub struct Settings {
     /// Where to show the recording overlay.
     #[serde(default)]
     pub overlay_position: OverlayPosition,
+    /// Whether skill rewrites apply Unicode text formatting (bold/italic).
+    #[serde(default = "default_true")]
+    pub skill_formatting: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_vad_silence_timeout() -> f32 {
@@ -117,6 +124,7 @@ impl Default for Settings {
             rewrite_hotkey: default_rewrite_hotkey(),
             audio_input_device: None,
             overlay_position: OverlayPosition::TopCenter,
+            skill_formatting: true,
         }
     }
 }

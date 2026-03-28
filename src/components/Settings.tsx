@@ -180,7 +180,7 @@ export default function Settings() {
           <AudioTab settings={settings} save={save} />
         )}
         {activeTab === "dictionary" && <DictionaryEditor />}
-        {activeTab === "skills" && <SkillsTab />}
+        {activeTab === "skills" && <SkillsTab settings={settings} save={save} />}
         {activeTab === "history" && <History />}
         {activeTab === "license" && <LicenseTab />}
         {activeTab === "about" && <AboutTab />}
@@ -990,7 +990,7 @@ function GroqUsageCard() {
 }
 
 /** Skills tab — shows all loaded voice-triggered skills. */
-function SkillsTab() {
+function SkillsTab({ settings, save }: { settings: import("../lib/types").Settings; save: (s: import("../lib/types").Settings) => void }) {
   const [skills, setSkills] = useState<SkillInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -1039,6 +1039,21 @@ function SkillsTab() {
         Say the trigger command at the start or end of your recording to activate a skill.
         You can also say "slash" instead of typing "/".
       </p>
+      <SettingsGroup title="Options">
+        <SettingsRow
+          label="Text Formatting"
+          description="Apply bold/italic Unicode styling to skill output"
+        >
+          <input
+            type="checkbox"
+            className="apple-toggle"
+            checked={settings.skill_formatting}
+            onChange={(e) =>
+              save({ ...settings, skill_formatting: e.target.checked })
+            }
+          />
+        </SettingsRow>
+      </SettingsGroup>
       {skills.length === 0 ? (
         <SettingsGroup>
           <div className="px-3 py-4 text-sm text-[var(--text-secondary)]">

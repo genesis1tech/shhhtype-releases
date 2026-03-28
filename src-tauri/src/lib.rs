@@ -459,7 +459,7 @@ pub fn register_rewrite_hotkey(app: &tauri::AppHandle, shortcut_str: &str) {
                     }
                 };
 
-                match rewrite::rewrite_text(&rewrite_text_input, &config.rewrite_style, config.groq_api_key.as_deref().unwrap_or(""), Some(&state.groq_usage), custom_prompt.as_deref()) {
+                match rewrite::rewrite_text(&rewrite_text_input, &config.rewrite_style, config.groq_api_key.as_deref().unwrap_or(""), Some(&state.groq_usage), custom_prompt.as_deref(), config.skill_formatting) {
                     Ok(rewritten) => {
                         log::info!("Rewrite complete (multi={}, chars={}): {}", is_multi, char_count, rewritten);
                         analytics::track("rewrite_completed", serde_json::json!({

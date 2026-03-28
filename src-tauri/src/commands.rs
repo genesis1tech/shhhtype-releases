@@ -662,7 +662,7 @@ pub fn rewrite_last_transcription(
 
     log::info!("Rewriting {} segment(s) with style: {:?}", if is_multi { "multiple" } else { "single" }, rewrite_style);
 
-    let rewritten = crate::rewrite::rewrite_text(&rewrite_input, &rewrite_style, api_key, Some(&state.groq_usage), custom_prompt.as_deref())
+    let rewritten = crate::rewrite::rewrite_text(&rewrite_input, &rewrite_style, api_key, Some(&state.groq_usage), custom_prompt.as_deref(), config.skill_formatting)
         .map_err(|e| format!("Rewrite failed: {}", e))?;
 
     // Clear both buffers after successful rewrite
@@ -768,7 +768,7 @@ pub fn rewrite_and_inject(
     log::info!("Rewrite-and-inject: {} segment(s), {} chars, style: {:?}",
         if is_multi { "multiple" } else { "single" }, char_count, rewrite_style);
 
-    let rewritten = crate::rewrite::rewrite_text(&rewrite_input, &rewrite_style, api_key, Some(&state.groq_usage), custom_prompt.as_deref())
+    let rewritten = crate::rewrite::rewrite_text(&rewrite_input, &rewrite_style, api_key, Some(&state.groq_usage), custom_prompt.as_deref(), config.skill_formatting)
         .map_err(|e| format!("Rewrite failed: {}", e))?;
 
     // Select-back and replace the original injected text

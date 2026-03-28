@@ -41,6 +41,7 @@ export interface Settings {
   rewrite_hotkey: string;
   audio_input_device: string | null;
   overlay_position: OverlayPosition;
+  skill_formatting: boolean;
 }
 
 /** Audio input device info */
