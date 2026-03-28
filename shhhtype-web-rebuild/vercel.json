@@ -1,0 +1,20 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/zoho-keepalive",
+      "schedule": "0 9 * * 1"
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "beta.shhhtype.com" }],
+      "destination": "/beta"
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "waiting.shhhtype.com" }],
+      "destination": "/waiting"
+    }
+  ]
+}
