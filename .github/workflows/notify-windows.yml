@@ -1,0 +1,26 @@
+name: Notify Windows Repo
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+jobs:
+  notify:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch to shhhtype-win
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.CROSS_REPO_PAT }}
+          repository: genesis1tech/shhhtype-win
+          event-type: macos-sync
+          client-payload: |
+            {
+              "pr_number": ${{ github.event.pull_request.number }},
+              "pr_title": "${{ github.event.pull_request.title }}",
+              "pr_url": "${{ github.event.pull_request.html_url }}",
+              "merge_sha": "${{ github.event.pull_request.merge_commit_sha }}",
+              "base_sha": "${{ github.event.pull_request.base.sha }}"
+            }
