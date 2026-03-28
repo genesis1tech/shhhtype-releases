@@ -1,7 +1,6 @@
 import { Infinity, Sparkles, Globe, Mic } from "lucide-react";
 
-const CHECKOUT_URL =
-  "https://shhhtype.lemonsqueezy.com/checkout/buy/c74816d2-4704-4248-abcb-fe565d518935";
+const SIGNUP_URL = "/signup";
 
 export function ProVersion() {
   return (
@@ -62,7 +61,7 @@ export function ProVersion() {
 
             <div className="mt-8 sm:mt-12 flex flex-col sm:flex-row gap-3 sm:gap-4">
               <a
-                href={CHECKOUT_URL}
+                href={SIGNUP_URL}
                 className="bg-white text-gray-900 px-6 py-3.5 rounded-full font-semibold hover:bg-rose-50 transition-colors font-montserrat text-center min-h-[44px] flex items-center justify-center"
               >
                 Start Free Trial

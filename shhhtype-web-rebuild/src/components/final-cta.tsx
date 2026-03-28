@@ -1,8 +1,7 @@
 import { ArrowRight } from "lucide-react";
 import Image from "next/image";
 
-const CHECKOUT_URL =
-  "https://shhhtype.lemonsqueezy.com/checkout/buy/c74816d2-4704-4248-abcb-fe565d518935";
+const SIGNUP_URL = "/signup";
 
 export function FinalCta() {
   return (
@@ -22,7 +21,7 @@ export function FinalCta() {
         The thinking takes 30 seconds. The formatting used to take 30 minutes. ShhhType turns your voice into ready-to-publish LinkedIn posts, DMs, and connection notes — in one spoken command.
       </p>
       <a
-        href={CHECKOUT_URL}
+        href={SIGNUP_URL}
         className="inline-flex items-center gap-2 sm:gap-3 bg-gradient-to-r from-rose-500 to-orange-500 text-white pl-6 sm:pl-8 pr-5 sm:pr-6 py-3.5 sm:py-4 rounded-full text-base sm:text-lg hover:shadow-lg hover:shadow-rose-500/30 transition-all duration-300 font-montserrat font-semibold group/btn min-h-[44px]"
       >
         Start Free Trial

@@ -4,8 +4,7 @@ import { useState, useCallback } from "react";
 import { ArrowRight, Menu, X } from "lucide-react";
 import Image from "next/image";
 
-const CHECKOUT_URL =
-  "https://shhhtype.lemonsqueezy.com/checkout/buy/c74816d2-4704-4248-abcb-fe565d518935";
+const SIGNUP_URL = "/signup";
 
 export function Nav() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -62,7 +61,7 @@ export function Nav() {
           </div>
           <div className="h-4 w-px bg-gray-200 hidden md:block"></div>
           <a
-            href={CHECKOUT_URL}
+            href={SIGNUP_URL}
             className="hidden sm:flex group bg-gray-900 text-white text-sm px-5 py-2.5 rounded-full hover:bg-rose-600 hover:shadow-lg hover:shadow-rose-600/30 transition-all duration-300 items-center gap-2 font-montserrat font-medium"
           >
             Try Free
@@ -138,7 +137,7 @@ export function Nav() {
           </div>
           <div className="mt-6 pt-6 border-t border-gray-100">
             <a
-              href={CHECKOUT_URL}
+              href={SIGNUP_URL}
               className="w-full bg-gray-900 text-white py-3.5 rounded-full text-base font-montserrat font-medium flex items-center justify-center gap-2 hover:bg-rose-600 transition-colors"
             >
               Start Free Trial

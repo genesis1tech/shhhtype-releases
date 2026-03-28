@@ -1,7 +1,6 @@
 import { Mic, Lock, Sparkles, Globe, Clock, ArrowRight, Hash, Flame } from "lucide-react";
 
-const CHECKOUT_URL =
-  "https://shhhtype.lemonsqueezy.com/checkout/buy/c74816d2-4704-4248-abcb-fe565d518935";
+const SIGNUP_URL = "/signup";
 
 export function Features() {
   return (
@@ -117,7 +116,7 @@ export function Features() {
       {/* Single Buy Now CTA */}
       <div className="text-center mt-10 sm:mt-12">
         <a
-          href={CHECKOUT_URL}
+          href={SIGNUP_URL}
           className="inline-flex items-center gap-2 sm:gap-3 bg-gray-900 text-white pl-6 sm:pl-8 pr-5 sm:pr-6 py-3.5 sm:py-4 rounded-full text-sm sm:text-base hover:bg-rose-600 hover:shadow-lg hover:shadow-rose-600/20 transition-all duration-300 font-montserrat font-medium group/btn min-h-[44px]"
         >
           Start Free Trial

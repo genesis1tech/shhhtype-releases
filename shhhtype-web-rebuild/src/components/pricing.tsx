@@ -1,10 +1,7 @@
 import { Check } from "lucide-react";
 
-const CHECKOUT_URL_MONTHLY =
-  "https://shhhtype.lemonsqueezy.com/checkout/buy/c74816d2-4704-4248-abcb-fe565d518935";
-
-const CHECKOUT_URL_YEARLY =
-  "https://shhhtype.lemonsqueezy.com/checkout/buy/142cb9f5-10e6-4a7d-ab93-ec87f4ee98e6";
+const SIGNUP_URL_MONTHLY = "/signup?plan=monthly";
+const SIGNUP_URL_YEARLY = "/signup?plan=yearly";
 
 const features = [
   "Voice Skills — /linkedin, /dm, /connect, /hormozi",
@@ -43,7 +40,7 @@ export function Pricing() {
           </div>
 
           <a
-            href={CHECKOUT_URL_MONTHLY}
+            href={SIGNUP_URL_MONTHLY}
             className="w-full bg-gray-900 text-white h-12 rounded-xl flex items-center justify-center font-montserrat font-bold text-sm hover:bg-rose-600 hover:shadow-lg hover:shadow-rose-600/20 transition-all active:scale-[0.98]"
           >
             Start Free Trial
@@ -74,7 +71,7 @@ export function Pricing() {
           </div>
 
           <a
-            href={CHECKOUT_URL_YEARLY}
+            href={SIGNUP_URL_YEARLY}
             className="w-full bg-gradient-to-r from-rose-500 to-orange-500 text-white h-12 rounded-xl flex items-center justify-center font-montserrat font-bold text-sm hover:shadow-lg hover:shadow-rose-500/30 transition-all active:scale-[0.98]"
           >
             Start Free Trial

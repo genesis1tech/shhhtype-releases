@@ -1,8 +1,7 @@
 import { ArrowRight, ChevronDown, Command, Mic, Zap, Sparkles } from "lucide-react";
 import Image from "next/image";
 
-const CHECKOUT_URL =
-  "https://shhhtype.lemonsqueezy.com/checkout/buy/c74816d2-4704-4248-abcb-fe565d518935";
+const SIGNUP_URL = "/signup";
 
 export function Hero() {
   return (
@@ -37,7 +36,7 @@ export function Hero() {
           {/* Buttons */}
           <div className="animate-fade-up delay-500 flex flex-wrap gap-3 sm:gap-4 items-center">
             <a
-              href={CHECKOUT_URL}
+              href={SIGNUP_URL}
               className="bg-gray-900 text-white pl-6 sm:pl-8 pr-5 sm:pr-6 py-3.5 sm:py-4 rounded-full text-sm sm:text-base hover:bg-rose-600 hover:shadow-lg hover:shadow-rose-600/20 transition-all duration-300 flex items-center gap-2 sm:gap-3 font-montserrat font-medium group/btn min-h-[44px]"
             >
               Start Free Trial
