@@ -13,7 +13,7 @@ export function HowItWorks() {
             <Keyboard className="w-8 h-8 sm:w-10 sm:h-10" />
           </div>
           <h3 className="text-base sm:text-xl font-montserrat font-semibold text-gray-900 mb-2 sm:mb-3 tracking-tight">Trigger</h3>
-          <p className="text-xs sm:text-sm text-gray-500 font-montserrat font-medium leading-relaxed mb-4">Press <code className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">Option+V</code> from any app.</p>
+          <p className="text-xs sm:text-sm text-gray-500 font-montserrat font-medium leading-relaxed mb-4">Press <code className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">Alt/Option+V</code> from any app.</p>
           <div className="mt-auto flex flex-wrap gap-1.5">
             <span className="inline-flex items-center justify-center bg-gray-100 text-gray-700 text-xs font-mono font-bold px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-sm">&#8997;</span>
             <span className="inline-flex items-center justify-center bg-gray-100 text-gray-700 text-xs font-mono font-bold px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-sm">V</span>
@@ -59,7 +59,7 @@ export function HowItWorks() {
           <div className="h-16 sm:h-20 w-full bg-[#E0E7FF] rounded-xl sm:rounded-2xl flex items-center justify-center mb-4 sm:mb-6 text-indigo-500 transition-transform group-hover:scale-[1.02] duration-500 flex-shrink-0">
             <Sparkles className="w-8 h-8 sm:w-10 sm:h-10" />
           </div>
-          <h3 className="text-base sm:text-xl font-montserrat font-semibold text-gray-900 mb-2 sm:mb-3 tracking-tight">Paste and Publish</h3>
+          <h3 className="text-base sm:text-xl font-montserrat font-semibold text-gray-900 mb-2 sm:mb-3 tracking-tight">Publish</h3>
           <p className="text-xs sm:text-sm text-gray-500 font-montserrat font-medium leading-relaxed mb-4">Ready-to-publish post. Tweak one line if you want to. Done in 60 seconds.</p>
           <div className="mt-auto flex items-center gap-2">
             <span className="text-xs font-montserrat font-medium text-gray-400">voice note</span>

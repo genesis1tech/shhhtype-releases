@@ -68,7 +68,7 @@ export default function RootLayout({
               operatingSystem: "macOS, Windows",
               offers: {
                 "@type": "Offer",
-                price: "15.00",
+                price: "20.00",
                 priceCurrency: "USD",
                 availability: "https://schema.org/InStock",
               },
@@ -76,7 +76,7 @@ export default function RootLayout({
                 "Voice Skills, LinkedIn post creation, LinkedIn DM generation, Connection notes, AI rewrite, Voice to text, Global hotkey, Local Whisper transcription, Cloud Groq transcription, 9 language support, Menu bar and system tray app, macOS, Windows",
               softwareVersion: "1.0",
               downloadUrl:
-                "https://shhhtype.lemonsqueezy.com/checkout/buy/1ea919ae-5f44-4ea9-bc4d-95e64cb41a87",
+                "https://shhhtype.lemonsqueezy.com/checkout/buy/c74816d2-4704-4248-abcb-fe565d518935",
               author: {
                 "@type": "Organization",
                 name: "Genesis1 Tech",
@@ -121,7 +121,7 @@ export default function RootLayout({
                   name: "How much does ShhhType cost?",
                   acceptedAnswer: {
                     "@type": "Answer",
-                    text: "ShhhType offers a 7-day free trial. After the trial, plans start at $15/month or $150/year. All features are included — Voice Skills, AI Rewrite, LinkedIn formatting, 9 languages, and more.",
+                    text: "ShhhType offers a 7-day free trial. After the trial, plans start at $20/month or $200/year. All features are included — Voice Skills, AI Rewrite, LinkedIn formatting, 9 languages, and more.",
                   },
                 },
                 {

@@ -1,5 +1,3 @@
-import { PenTool, MessageSquare, Users } from "lucide-react";
-
 export function WhoItsFor() {
   return (
     <div className="py-16 sm:py-24 overflow-hidden">
@@ -13,8 +11,8 @@ export function WhoItsFor() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-8">
         {/* Tier 1: Creator-Founders */}
         <div className="bg-white rounded-2xl sm:rounded-[2rem] p-5 sm:p-8 border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-gray-200/40 transition-all duration-300 group flex flex-col min-w-0 overflow-hidden">
-          <div className="h-28 sm:h-36 w-full bg-[#FFE4D6] rounded-2xl flex items-center justify-center mb-5 sm:mb-8 text-orange-500 transition-transform group-hover:scale-[1.02] duration-500 flex-shrink-0">
-            <PenTool className="w-10 sm:w-12 h-10 sm:h-12" />
+          <div className="h-28 sm:h-36 w-full rounded-2xl overflow-hidden mb-5 sm:mb-8 transition-transform group-hover:scale-[1.02] duration-500 flex-shrink-0">
+            <img src="https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=800&h=600&fit=crop&auto=format&q=80" alt="Content creator with microphone" className="w-full h-full object-cover" loading="lazy" />
           </div>
           <h3 className="text-xl sm:text-2xl font-montserrat font-semibold text-gray-900 mb-3 sm:mb-4 tracking-tight">
             LinkedIn Creators
@@ -31,8 +29,8 @@ export function WhoItsFor() {
 
         {/* Tier 2: Sales Professionals */}
         <div className="bg-white rounded-2xl sm:rounded-[2rem] p-5 sm:p-8 border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-gray-200/40 transition-all duration-300 group flex flex-col min-w-0 overflow-hidden">
-          <div className="h-28 sm:h-36 w-full bg-[#E0E7FF] rounded-2xl flex items-center justify-center mb-5 sm:mb-8 text-indigo-500 transition-transform group-hover:scale-[1.02] duration-500 flex-shrink-0">
-            <MessageSquare className="w-10 sm:w-12 h-10 sm:h-12" />
+          <div className="h-28 sm:h-36 w-full rounded-2xl overflow-hidden mb-5 sm:mb-8 transition-transform group-hover:scale-[1.02] duration-500 flex-shrink-0">
+            <img src="https://images.unsplash.com/photo-1552581234-26160f608093?w=800&h=600&fit=crop&auto=format&q=80" alt="Sales professional collaborating" className="w-full h-full object-cover" loading="lazy" />
           </div>
           <h3 className="text-xl sm:text-2xl font-montserrat font-semibold text-gray-900 mb-3 sm:mb-4 tracking-tight">
             B2B Sales Pros
@@ -49,8 +47,8 @@ export function WhoItsFor() {
 
         {/* Tier 3: Consultants */}
         <div className="bg-white rounded-2xl sm:rounded-[2rem] p-5 sm:p-8 border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-gray-200/40 transition-all duration-300 group flex flex-col min-w-0 overflow-hidden">
-          <div className="h-28 sm:h-36 w-full bg-[#FFE4D6] rounded-2xl flex items-center justify-center mb-5 sm:mb-8 text-orange-500 transition-transform group-hover:scale-[1.02] duration-500 flex-shrink-0">
-            <Users className="w-10 sm:w-12 h-10 sm:h-12" />
+          <div className="h-28 sm:h-36 w-full rounded-2xl overflow-hidden mb-5 sm:mb-8 transition-transform group-hover:scale-[1.02] duration-500 flex-shrink-0">
+            <img src="https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=800&h=600&fit=crop&auto=format&q=80" alt="Consultant working at laptop" className="w-full h-full object-cover" loading="lazy" />
           </div>
           <h3 className="text-xl sm:text-2xl font-montserrat font-semibold text-gray-900 mb-3 sm:mb-4 tracking-tight">
             Content Consultants

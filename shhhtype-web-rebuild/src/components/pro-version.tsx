@@ -1,7 +1,7 @@
 import { Infinity, Sparkles, Globe, Mic } from "lucide-react";
 
 const CHECKOUT_URL =
-  "https://shhhtype.lemonsqueezy.com/checkout/buy/1ea919ae-5f44-4ea9-bc4d-95e64cb41a87";
+  "https://shhhtype.lemonsqueezy.com/checkout/buy/c74816d2-4704-4248-abcb-fe565d518935";
 
 export function ProVersion() {
   return (
@@ -11,11 +11,6 @@ export function ProVersion() {
       <div className="absolute bottom-0 right-0 w-[250px] sm:w-[400px] h-[250px] sm:h-[400px] bg-rose-500/10 rounded-full blur-[100px] pointer-events-none"></div>
 
       <div className="relative z-10">
-        <div className="inline-flex items-center gap-2 rounded-full border border-gray-700 bg-gray-800/50 px-4 py-1 text-xs font-montserrat font-semibold text-rose-400 mb-8">
-          <span className="inline-flex h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse"></span>
-          PRO VERSION
-        </div>
-
         <div className="grid lg:grid-cols-2 gap-8 lg:gap-16 items-start">
           <div>
             <h2 className="text-2xl sm:text-4xl md:text-5xl text-white mb-4 sm:mb-6 tracking-tight font-medium">
@@ -23,7 +18,7 @@ export function ProVersion() {
               <span className="text-gray-400 italic">it consuming your morning.</span>
             </h2>
             <p className="text-base sm:text-lg text-gray-400 mb-8 sm:mb-10 leading-relaxed font-montserrat">
-              Ghostwriters cost $500+/month and still don&apos;t sound like you. ChatGPT is generic. ShhhType uses YOUR voice as input — $15/month for content that actually sounds like you wrote it.
+              When creating a post takes 60 seconds instead of 30 minutes, consistency isn&apos;t discipline — it&apos;s default. ShhhType uses YOUR voice as input for content that actually sounds like you wrote it.
             </p>
 
             <div className="space-y-6">
@@ -90,14 +85,13 @@ export function ProVersion() {
             </div>
             <p className="text-gray-500 mb-4">{"// ShhhType License"}</p>
             <div className="space-y-1 overflow-hidden">
-              <p className="text-gray-500 mb-3">{"// Cost comparison:"}</p>
-              <p className="break-all"><span className="text-purple-400">ghostwriter</span>: <span className="text-red-400 line-through">&quot;$500+/mo&quot;</span></p>
-              <p className="break-all"><span className="text-purple-400">taplio</span>: <span className="text-red-400 line-through">&quot;$49/mo&quot;</span></p>
-              <p className="break-all"><span className="text-purple-400">chatgpt_pro</span>: <span className="text-red-400 line-through">&quot;$20/mo&quot;</span> <span className="text-gray-500">// generic output</span></p>
-              <p className="break-all mt-3"><span className="text-purple-400">shhhtype</span>: <span className="text-green-400">&quot;$15/mo&quot;</span> <span className="text-gray-500">// sounds like YOU</span></p>
+              <p className="break-all"><span className="text-purple-400">plan</span>: <span className="text-green-400">&quot;ShhhType Pro&quot;</span></p>
+              <p className="break-all"><span className="text-purple-400">pricing</span>: <span className="text-green-400">&quot;$20/mo or $200/yr&quot;</span></p>
               <p className="break-all"><span className="text-purple-400">trial</span>: <span className="text-green-400">&quot;7 days free&quot;</span></p>
               <p className="break-all"><span className="text-purple-400">voice_skills</span>: <span className="text-orange-300">linkedin, dm, connect, hormozi</span></p>
               <p className="break-all"><span className="text-purple-400">custom_skills</span>: <span className="text-green-400">&quot;unlimited&quot;</span></p>
+              <p className="break-all"><span className="text-purple-400">languages</span>: <span className="text-orange-300">9 + auto-detect</span></p>
+              <p className="break-all"><span className="text-purple-400">updates</span>: <span className="text-green-400">&quot;continuous&quot;</span></p>
             </div>
 
             <div className="mt-8 pt-6 border-t border-gray-700">

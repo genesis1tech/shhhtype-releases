@@ -1,7 +1,10 @@
 import { Check } from "lucide-react";
 
-const CHECKOUT_URL =
-  "https://shhhtype.lemonsqueezy.com/checkout/buy/1ea919ae-5f44-4ea9-bc4d-95e64cb41a87";
+const CHECKOUT_URL_MONTHLY =
+  "https://shhhtype.lemonsqueezy.com/checkout/buy/c74816d2-4704-4248-abcb-fe565d518935";
+
+const CHECKOUT_URL_YEARLY =
+  "https://shhhtype.lemonsqueezy.com/checkout/buy/142cb9f5-10e6-4a7d-ab93-ec87f4ee98e6";
 
 const features = [
   "Voice Skills — /linkedin, /dm, /connect, /hormozi",
@@ -23,7 +26,7 @@ export function Pricing() {
         <div className="bg-white rounded-2xl sm:rounded-[2.5rem] border border-gray-200 shadow-sm p-6 sm:p-10 text-center">
           <p className="text-sm font-montserrat font-semibold text-gray-400 uppercase tracking-wider mb-4">Monthly</p>
           <div className="mb-2">
-            <span className="text-4xl sm:text-5xl font-montserrat font-bold text-gray-900">$15</span>
+            <span className="text-4xl sm:text-5xl font-montserrat font-bold text-gray-900">$20</span>
             <span className="text-base text-gray-500 font-montserrat font-medium ml-1">/mo</span>
           </div>
           <p className="text-sm text-gray-500 font-montserrat font-medium mb-6 sm:mb-8">Billed monthly</p>
@@ -40,7 +43,7 @@ export function Pricing() {
           </div>
 
           <a
-            href={CHECKOUT_URL}
+            href={CHECKOUT_URL_MONTHLY}
             className="w-full bg-gray-900 text-white h-12 rounded-xl flex items-center justify-center font-montserrat font-bold text-sm hover:bg-rose-600 hover:shadow-lg hover:shadow-rose-600/20 transition-all active:scale-[0.98]"
           >
             Start Free Trial
@@ -53,11 +56,11 @@ export function Pricing() {
 
           <p className="text-sm font-montserrat font-semibold text-gray-400 uppercase tracking-wider mb-4 mt-2">Yearly</p>
           <div className="mb-2">
-            <span className="text-4xl sm:text-5xl font-montserrat font-bold text-gray-900">$150</span>
+            <span className="text-4xl sm:text-5xl font-montserrat font-bold text-gray-900">$200</span>
             <span className="text-base text-gray-500 font-montserrat font-medium ml-1">/yr</span>
           </div>
           <p className="text-sm text-gray-500 font-montserrat font-medium mb-1">Billed annually</p>
-          <p className="text-xs text-rose-600 font-montserrat font-semibold mb-6 sm:mb-8">Save $30/year vs monthly</p>
+          <p className="text-xs text-rose-600 font-montserrat font-semibold mb-6 sm:mb-8">Save $40/year vs monthly</p>
 
           <div className="text-left space-y-3 mb-8">
             {features.map((feature) => (
@@ -71,7 +74,7 @@ export function Pricing() {
           </div>
 
           <a
-            href={CHECKOUT_URL}
+            href={CHECKOUT_URL_YEARLY}
             className="w-full bg-gradient-to-r from-rose-500 to-orange-500 text-white h-12 rounded-xl flex items-center justify-center font-montserrat font-bold text-sm hover:shadow-lg hover:shadow-rose-500/30 transition-all active:scale-[0.98]"
           >
             Start Free Trial

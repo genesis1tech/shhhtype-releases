@@ -58,10 +58,10 @@ export function TermsContent() {
       </h3>
       <ul className="text-sm sm:text-base text-gray-600 font-montserrat leading-relaxed mb-4 ml-6 list-disc">
         <li className="mb-2">
-          <strong>Monthly:</strong> $15.00 USD per month
+          <strong>Monthly:</strong> $20.00 USD per month
         </li>
         <li className="mb-2">
-          <strong>Yearly:</strong> $150.00 USD per year
+          <strong>Yearly:</strong> $200.00 USD per year
         </li>
       </ul>
       <p className="text-sm sm:text-base text-gray-600 font-montserrat leading-relaxed mb-4">

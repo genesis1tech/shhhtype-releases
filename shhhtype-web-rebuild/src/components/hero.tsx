@@ -2,7 +2,7 @@ import { ArrowRight, ChevronDown, Command, Mic, Zap, Sparkles } from "lucide-rea
 import Image from "next/image";
 
 const CHECKOUT_URL =
-  "https://shhhtype.lemonsqueezy.com/checkout/buy/1ea919ae-5f44-4ea9-bc4d-95e64cb41a87";
+  "https://shhhtype.lemonsqueezy.com/checkout/buy/c74816d2-4704-4248-abcb-fe565d518935";
 
 export function Hero() {
   return (
@@ -117,7 +117,7 @@ export function Hero() {
                   <Sparkles className="w-5 h-5" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-montserrat font-bold text-gray-900 truncate">Paste and publish</p>
+                  <p className="text-sm font-montserrat font-bold text-gray-900 truncate">Publish</p>
                   <p className="text-xs text-gray-500 font-montserrat mt-0.5 truncate">60 seconds, start to finish</p>
                 </div>
               </div>
