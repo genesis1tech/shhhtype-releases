@@ -1,0 +1,1114 @@
+# =============================================================================
+# WASTE CLASSIFICATION TAXONOMY
+# =============================================================================
+#
+# Complete taxonomy for smart waste bin classification system.
+# Defines materials, objects, conditions, and bin mappings.
+#
+# Version: 1.0
+# Date: January 2026
+#
+# =============================================================================
+
+version: "1.0"
+total_categories: 61
+
+# =============================================================================
+# BIN DEFINITIONS
+# =============================================================================
+
+bins:
+  PLASTIC:
+    id: 0
+    color_code: "#3498db"  # Blue
+    color_name: "Blue"
+    description: "Recyclable plastics (PET, HDPE, PP)"
+    accepted_materials:
+      - PET
+      - HDPE
+      - PP
+    notes: "Must be clean and dry. Remove caps."
+    
+  METAL:
+    id: 1
+    color_code: "#95a5a6"  # Silver/Gray
+    color_name: "Silver"
+    description: "Aluminum and steel items"
+    accepted_materials:
+      - ALUMINUM
+      - STEEL
+    notes: "Rinse food cans. Crush cans to save space."
+    
+  GLASS:
+    id: 2
+    color_code: "#27ae60"  # Green
+    color_name: "Green"
+    description: "Glass bottles and jars"
+    accepted_materials:
+      - GLASS
+    notes: "Remove lids. Do not include broken glass in some facilities."
+    
+  PAPER:
+    id: 3
+    color_code: "#f1c40f"  # Yellow
+    color_name: "Yellow"
+    description: "Paper and cardboard"
+    accepted_materials:
+      - PAPER
+      - CARDBOARD
+    notes: "Must be clean and dry. Flatten boxes."
+    
+  COMPOST:
+    id: 4
+    color_code: "#8b4513"  # Brown
+    color_name: "Brown"
+    description: "Food waste and organics"
+    accepted_materials:
+      - ORGANIC
+    notes: "No meat/dairy in some facilities. Check local rules."
+    
+  TRASH:
+    id: 5
+    color_code: "#2c3e50"  # Black
+    color_name: "Black"
+    description: "Non-recyclable waste"
+    accepted_materials:
+      - PS
+      - PVC
+      - LDPE
+      - COMPOSITE
+      - TEXTILE
+      - OTHER
+    notes: "Last resort. Try to minimize."
+
+
+# =============================================================================
+# MATERIAL DEFINITIONS
+# =============================================================================
+
+materials:
+  # ---------------------------------------------------------------------------
+  # PLASTICS
+  # ---------------------------------------------------------------------------
+  PET:
+    full_name: "Polyethylene Terephthalate"
+    resin_code: 1
+    recyclable: true
+    default_bin: PLASTIC
+    common_items:
+      - Water bottles
+      - Soda bottles
+      - Food containers
+    identification_tips:
+      - Clear or slightly tinted
+      - Often has recycling symbol #1
+      - Lightweight
+      
+  HDPE:
+    full_name: "High-Density Polyethylene"
+    resin_code: 2
+    recyclable: true
+    default_bin: PLASTIC
+    common_items:
+      - Milk jugs
+      - Detergent bottles
+      - Shampoo bottles
+    identification_tips:
+      - Usually opaque white or colored
+      - Feels waxy
+      - Recycling symbol #2
+      
+  PVC:
+    full_name: "Polyvinyl Chloride"
+    resin_code: 3
+    recyclable: false
+    default_bin: TRASH
+    common_items:
+      - Pipes
+      - Some packaging
+      - Credit cards
+    identification_tips:
+      - Hard and rigid
+      - Recycling symbol #3
+      - Often clear
+    notes: "NOT recyclable in most programs"
+      
+  LDPE:
+    full_name: "Low-Density Polyethylene"
+    resin_code: 4
+    recyclable: false  # Not in curbside, but store drop-off
+    default_bin: TRASH
+    common_items:
+      - Plastic bags
+      - Squeeze bottles
+      - Plastic wrap
+    identification_tips:
+      - Flexible and soft
+      - Recycling symbol #4
+      - Often transparent
+    notes: "Return to store for special recycling"
+      
+  PP:
+    full_name: "Polypropylene"
+    resin_code: 5
+    recyclable: true
+    default_bin: PLASTIC
+    common_items:
+      - Yogurt cups
+      - Bottle caps
+      - Straws (some)
+    identification_tips:
+      - Slightly flexible
+      - Often cloudy or opaque
+      - Recycling symbol #5
+      
+  PS:
+    full_name: "Polystyrene (Styrofoam)"
+    resin_code: 6
+    recyclable: false
+    default_bin: TRASH
+    common_items:
+      - Styrofoam cups
+      - Takeout containers
+      - Packing peanuts
+    identification_tips:
+      - Very light
+      - Breaks into small pieces
+      - Recycling symbol #6
+    notes: "NOT recyclable - avoid using"
+      
+  OTHER_PLASTIC:
+    full_name: "Other Plastics"
+    resin_code: 7
+    recyclable: false
+    default_bin: TRASH
+    common_items:
+      - Mixed plastics
+      - Bioplastics
+      - Multi-layer packaging
+    notes: "Generally not recyclable"
+
+  # ---------------------------------------------------------------------------
+  # METALS
+  # ---------------------------------------------------------------------------
+  ALUMINUM:
+    recyclable: true
+    default_bin: METAL
+    common_items:
+      - Beverage cans
+      - Foil
+      - Pie tins
+    identification_tips:
+      - Lightweight
+      - Non-magnetic
+      - Shiny surface
+      
+  STEEL:
+    recyclable: true
+    default_bin: METAL
+    common_items:
+      - Food cans
+      - Aerosol cans
+      - Lids
+    identification_tips:
+      - Magnetic
+      - Heavier than aluminum
+      - May have seams
+
+  # ---------------------------------------------------------------------------
+  # GLASS
+  # ---------------------------------------------------------------------------
+  GLASS:
+    recyclable: true
+    default_bin: GLASS
+    common_items:
+      - Bottles
+      - Jars
+      - Containers
+    identification_tips:
+      - Heavy
+      - Transparent or colored
+      - Hard and brittle
+
+  # ---------------------------------------------------------------------------
+  # PAPER
+  # ---------------------------------------------------------------------------
+  PAPER:
+    recyclable: true
+    default_bin: PAPER
+    condition_rules:
+      - condition: soiled
+        override_bin: COMPOST
+      - condition: wet
+        override_bin: TRASH
+    common_items:
+      - Office paper
+      - Newspaper
+      - Magazines
+      
+  CARDBOARD:
+    recyclable: true
+    default_bin: PAPER
+    condition_rules:
+      - condition: soiled
+        override_bin: TRASH  # Heavy grease
+      - condition: wet
+        override_bin: TRASH
+    common_items:
+      - Shipping boxes
+      - Cereal boxes
+      - Packaging
+
+  # ---------------------------------------------------------------------------
+  # ORGANIC
+  # ---------------------------------------------------------------------------
+  ORGANIC:
+    recyclable: false
+    default_bin: COMPOST
+    common_items:
+      - Food scraps
+      - Coffee grounds
+      - Yard waste
+
+  # ---------------------------------------------------------------------------
+  # OTHER
+  # ---------------------------------------------------------------------------
+  COMPOSITE:
+    recyclable: false
+    default_bin: TRASH
+    common_items:
+      - Chip bags
+      - Tetra Pak (varies by location)
+      - Wax-lined cups
+    notes: "Made of multiple materials, hard to separate"
+      
+  TEXTILE:
+    recyclable: false
+    default_bin: TRASH
+    common_items:
+      - Clothing scraps
+      - Fabric
+    notes: "Donate if in good condition"
+
+
+# =============================================================================
+# CONDITION DEFINITIONS
+# =============================================================================
+
+conditions:
+  clean:
+    description: "No visible contamination, ready for recycling"
+    effect: "Use default bin assignment"
+    
+  soiled:
+    description: "Food residue or other contamination visible"
+    effect: "May redirect to different bin"
+    rules:
+      - material: [PLASTIC, ALUMINUM, STEEL]
+        override_bin: TRASH
+      - material: [PAPER, CARDBOARD]
+        override_bin: COMPOST  # Can be composted if food-soiled
+        
+  wet:
+    description: "Visibly wet or water-damaged"
+    effect: "Paper products become non-recyclable"
+    rules:
+      - material: [PAPER, CARDBOARD]
+        override_bin: TRASH
+        
+  crushed:
+    description: "Deformed but still identifiable"
+    effect: "No change to bin assignment"
+    
+  damaged:
+    description: "Torn, broken, or significantly damaged"
+    effect: "No change to bin assignment"
+
+
+# =============================================================================
+# CATEGORY DEFINITIONS
+# =============================================================================
+
+categories:
+  # ---------------------------------------------------------------------------
+  # PLASTIC BIN CATEGORIES
+  # ---------------------------------------------------------------------------
+  - id: 0
+    name: "pet_water_bottle"
+    display_name: "Water Bottle (Plastic)"
+    material: PET
+    object_type: water_bottle
+    default_bin: PLASTIC
+    condition_sensitive: true
+    visual_features:
+      - Clear plastic
+      - Cylindrical shape
+      - Usually has label
+      
+  - id: 1
+    name: "pet_soda_bottle"
+    display_name: "Soda Bottle (Plastic)"
+    material: PET
+    object_type: soda_bottle
+    default_bin: PLASTIC
+    condition_sensitive: true
+    visual_features:
+      - Clear or green plastic
+      - Curved shape
+      - Has label and cap
+      
+  - id: 2
+    name: "hdpe_milk_jug"
+    display_name: "Milk Jug"
+    material: HDPE
+    object_type: milk_jug
+    default_bin: PLASTIC
+    condition_sensitive: true
+    visual_features:
+      - Opaque white plastic
+      - Handle on side
+      - Round cap
+      
+  - id: 3
+    name: "pp_yogurt_cup"
+    display_name: "Yogurt Cup"
+    material: PP
+    object_type: yogurt_cup
+    default_bin: PLASTIC
+    condition_sensitive: true
+    visual_features:
+      - Small container
+      - Often has foil lid
+      - White or colored
+      
+  - id: 4
+    name: "pp_bottle_cap"
+    display_name: "Plastic Bottle Cap"
+    material: PP
+    object_type: bottle_cap
+    default_bin: PLASTIC
+    condition_sensitive: false
+    visual_features:
+      - Small round cap
+      - Threaded interior
+      - Various colors
+      
+  - id: 5
+    name: "plastic_food_container"
+    display_name: "Plastic Food Container"
+    material: PP
+    object_type: food_container
+    default_bin: PLASTIC
+    condition_sensitive: true
+    visual_features:
+      - Clear or colored
+      - Rectangular or round
+      - Snap-on lid
+      
+  - id: 6
+    name: "plastic_cup"
+    display_name: "Plastic Cup"
+    material: PET
+    object_type: disposable_cup
+    default_bin: PLASTIC
+    condition_sensitive: true
+    visual_features:
+      - Clear plastic
+      - Tapered shape
+      - May have straw slot
+      
+  - id: 7
+    name: "plastic_lid"
+    display_name: "Plastic Lid"
+    material: PP
+    object_type: cup_lid
+    default_bin: PLASTIC
+    condition_sensitive: false
+    visual_features:
+      - Dome or flat shape
+      - Straw hole
+      - Clear or colored
+      
+  - id: 8
+    name: "plastic_clamshell"
+    display_name: "Clamshell Container"
+    material: PET
+    object_type: clamshell
+    default_bin: PLASTIC
+    condition_sensitive: true
+    visual_features:
+      - Hinged design
+      - Clear plastic
+      - Used for berries, salads
+
+  # ---------------------------------------------------------------------------
+  # METAL BIN CATEGORIES
+  # ---------------------------------------------------------------------------
+  - id: 9
+    name: "aluminum_soda_can"
+    display_name: "Soda Can"
+    material: ALUMINUM
+    object_type: soda_can
+    default_bin: METAL
+    condition_sensitive: false
+    visual_features:
+      - Cylindrical shape
+      - Pull tab on top
+      - Printed graphics
+      
+  - id: 10
+    name: "aluminum_beer_can"
+    display_name: "Beer Can"
+    material: ALUMINUM
+    object_type: beer_can
+    default_bin: METAL
+    condition_sensitive: false
+    visual_features:
+      - Similar to soda can
+      - Different label designs
+      
+  - id: 11
+    name: "aluminum_foil"
+    display_name: "Aluminum Foil"
+    material: ALUMINUM
+    object_type: aluminum_foil
+    default_bin: METAL
+    condition_sensitive: true
+    visual_features:
+      - Thin metallic sheet
+      - Crinkled or flat
+      - Shiny surface
+      
+  - id: 12
+    name: "aluminum_tray"
+    display_name: "Aluminum Tray"
+    material: ALUMINUM
+    object_type: aluminum_tray
+    default_bin: METAL
+    condition_sensitive: true
+    visual_features:
+      - Rectangular or round
+      - Shallow depth
+      - Often ridged
+      
+  - id: 13
+    name: "steel_food_can"
+    display_name: "Food Can (Steel)"
+    material: STEEL
+    object_type: food_can
+    default_bin: METAL
+    condition_sensitive: true
+    visual_features:
+      - Cylindrical
+      - Ridged sides
+      - Paper label
+      
+  - id: 14
+    name: "metal_lid"
+    display_name: "Metal Lid"
+    material: STEEL
+    object_type: metal_lid
+    default_bin: METAL
+    condition_sensitive: false
+    visual_features:
+      - Circular shape
+      - May have text imprint
+      
+  - id: 15
+    name: "pop_tab"
+    display_name: "Pop Tab"
+    material: ALUMINUM
+    object_type: pop_tab
+    default_bin: METAL
+    condition_sensitive: false
+    visual_features:
+      - Small ring shape
+      - Attached to can or loose
+      
+  - id: 16
+    name: "metal_bottle_cap"
+    display_name: "Metal Bottle Cap"
+    material: STEEL
+    object_type: bottle_cap_metal
+    default_bin: METAL
+    condition_sensitive: false
+    visual_features:
+      - Crimped edges
+      - Round shape
+      - Usually from beer/soda bottles
+      
+  - id: 17
+    name: "aerosol_can"
+    display_name: "Aerosol Can"
+    material: STEEL
+    object_type: aerosol_can
+    default_bin: METAL
+    condition_sensitive: false
+    visual_features:
+      - Tall cylindrical
+      - Spray nozzle on top
+      - Warning labels
+    notes: "Must be empty"
+
+  # ---------------------------------------------------------------------------
+  # GLASS BIN CATEGORIES
+  # ---------------------------------------------------------------------------
+  - id: 18
+    name: "glass_bottle_clear"
+    display_name: "Clear Glass Bottle"
+    material: GLASS
+    object_type: bottle
+    default_bin: GLASS
+    condition_sensitive: false
+    visual_features:
+      - Transparent
+      - Various shapes
+      
+  - id: 19
+    name: "glass_bottle_green"
+    display_name: "Green Glass Bottle"
+    material: GLASS
+    object_type: bottle
+    default_bin: GLASS
+    condition_sensitive: false
+    visual_features:
+      - Green tinted
+      - Often wine/beer bottles
+      
+  - id: 20
+    name: "glass_bottle_brown"
+    display_name: "Brown Glass Bottle"
+    material: GLASS
+    object_type: bottle
+    default_bin: GLASS
+    condition_sensitive: false
+    visual_features:
+      - Brown/amber tinted
+      - Often beer bottles
+      
+  - id: 21
+    name: "glass_jar"
+    display_name: "Glass Jar"
+    material: GLASS
+    object_type: jar
+    default_bin: GLASS
+    condition_sensitive: true
+    visual_features:
+      - Wide mouth
+      - Metal lid usually
+      - Used for food storage
+      
+  - id: 22
+    name: "glass_container"
+    display_name: "Glass Container"
+    material: GLASS
+    object_type: container
+    default_bin: GLASS
+    condition_sensitive: true
+    visual_features:
+      - Various shapes
+      - May have snap or screw lid
+      
+  - id: 23
+    name: "broken_glass"
+    display_name: "Broken Glass"
+    material: GLASS
+    object_type: broken_glass
+    default_bin: GLASS
+    condition_sensitive: false
+    visual_features:
+      - Sharp edges
+      - Irregular shapes
+    notes: "Handle with care. Some facilities don't accept."
+
+  # ---------------------------------------------------------------------------
+  # PAPER BIN CATEGORIES
+  # ---------------------------------------------------------------------------
+  - id: 24
+    name: "office_paper"
+    display_name: "Office Paper"
+    material: PAPER
+    object_type: office_paper
+    default_bin: PAPER
+    condition_sensitive: true
+    visual_features:
+      - White sheets
+      - A4/Letter size
+      - May have printing
+      
+  - id: 25
+    name: "newspaper"
+    display_name: "Newspaper"
+    material: PAPER
+    object_type: newspaper
+    default_bin: PAPER
+    condition_sensitive: true
+    visual_features:
+      - Large sheets
+      - Newsprint (grayish)
+      - Black and white mostly
+      
+  - id: 26
+    name: "magazine"
+    display_name: "Magazine"
+    material: PAPER
+    object_type: magazine
+    default_bin: PAPER
+    condition_sensitive: true
+    visual_features:
+      - Glossy pages
+      - Colorful
+      - Stapled binding
+      
+  - id: 27
+    name: "cardboard_box"
+    display_name: "Cardboard Box"
+    material: CARDBOARD
+    object_type: shipping_box
+    default_bin: PAPER
+    condition_sensitive: true
+    visual_features:
+      - Brown corrugated
+      - 3D box shape
+      - Tape and labels
+      
+  - id: 28
+    name: "cardboard_flat"
+    display_name: "Cardboard (Flat)"
+    material: CARDBOARD
+    object_type: cardboard_piece
+    default_bin: PAPER
+    condition_sensitive: true
+    visual_features:
+      - Flat brown material
+      - Corrugated layers visible
+      
+  - id: 29
+    name: "paper_bag"
+    display_name: "Paper Bag"
+    material: PAPER
+    object_type: paper_bag
+    default_bin: PAPER
+    condition_sensitive: true
+    visual_features:
+      - Brown kraft paper
+      - Handles often
+      - Grocery/lunch bags
+      
+  - id: 30
+    name: "egg_carton"
+    display_name: "Egg Carton"
+    material: CARDBOARD
+    object_type: egg_carton
+    default_bin: PAPER
+    condition_sensitive: false
+    visual_features:
+      - Molded pulp material
+      - Cup shapes for eggs
+      - Gray or brown
+      
+  - id: 31
+    name: "juice_box"
+    display_name: "Juice Box"
+    material: COMPOSITE
+    object_type: juice_box
+    default_bin: PAPER
+    condition_sensitive: false
+    visual_features:
+      - Small rectangular box
+      - Straw hole
+      - Colorful printing
+    notes: "Varies by location - some accept, some don't"
+      
+  - id: 32
+    name: "food_box"
+    display_name: "Food Box"
+    material: CARDBOARD
+    object_type: food_box
+    default_bin: PAPER
+    condition_sensitive: true
+    visual_features:
+      - Cereal boxes, pasta boxes
+      - Printed cardboard
+      - Rectangular shape
+      
+  - id: 33
+    name: "pizza_box"
+    display_name: "Pizza Box"
+    material: CARDBOARD
+    object_type: pizza_box
+    default_bin: PAPER
+    condition_sensitive: true
+    visual_features:
+      - Large square box
+      - Often has grease stains
+    notes: "If heavily soiled, goes to TRASH"
+
+  # ---------------------------------------------------------------------------
+  # COMPOST BIN CATEGORIES
+  # ---------------------------------------------------------------------------
+  - id: 34
+    name: "fruit_peel"
+    display_name: "Fruit Peel"
+    material: ORGANIC
+    object_type: fruit_peel
+    default_bin: COMPOST
+    condition_sensitive: false
+    visual_features:
+      - Banana peels, orange peels
+      - Curved shapes
+      - Various colors
+      
+  - id: 35
+    name: "fruit_core"
+    display_name: "Fruit Core"
+    material: ORGANIC
+    object_type: fruit_core
+    default_bin: COMPOST
+    condition_sensitive: false
+    visual_features:
+      - Apple cores
+      - Seed visible
+      
+  - id: 36
+    name: "vegetable_scraps"
+    display_name: "Vegetable Scraps"
+    material: ORGANIC
+    object_type: vegetable_scraps
+    default_bin: COMPOST
+    condition_sensitive: false
+    visual_features:
+      - Peels, ends, stems
+      - Various greens
+      
+  - id: 37
+    name: "egg_shell"
+    display_name: "Egg Shell"
+    material: ORGANIC
+    object_type: egg_shell
+    default_bin: COMPOST
+    condition_sensitive: false
+    visual_features:
+      - White/brown curved fragments
+      - Brittle texture
+      
+  - id: 38
+    name: "coffee_grounds"
+    display_name: "Coffee Grounds"
+    material: ORGANIC
+    object_type: coffee_grounds
+    default_bin: COMPOST
+    condition_sensitive: false
+    visual_features:
+      - Dark brown granular
+      - Often in filter
+      
+  - id: 39
+    name: "tea_bag"
+    display_name: "Tea Bag"
+    material: ORGANIC
+    object_type: tea_bag
+    default_bin: COMPOST
+    condition_sensitive: false
+    visual_features:
+      - Small pouch
+      - String attached
+      - Wet appearance
+    notes: "Remove staple if present"
+      
+  - id: 40
+    name: "food_leftovers"
+    display_name: "Food Leftovers"
+    material: ORGANIC
+    object_type: food_leftovers
+    default_bin: COMPOST
+    condition_sensitive: false
+    visual_features:
+      - Mixed food items
+      - Various colors and textures
+    notes: "Check local rules for meat/dairy"
+      
+  - id: 41
+    name: "napkin_soiled"
+    display_name: "Soiled Paper Napkin"
+    material: PAPER
+    object_type: napkin
+    default_bin: COMPOST
+    condition_sensitive: false
+    visual_features:
+      - Crumpled paper
+      - Food stains visible
+      
+  - id: 42
+    name: "paper_towel_soiled"
+    display_name: "Soiled Paper Towel"
+    material: PAPER
+    object_type: paper_towel
+    default_bin: COMPOST
+    condition_sensitive: false
+    visual_features:
+      - Larger than napkin
+      - Textured surface
+      - Stains visible
+
+  # ---------------------------------------------------------------------------
+  # TRASH BIN CATEGORIES
+  # ---------------------------------------------------------------------------
+  - id: 43
+    name: "styrofoam_cup"
+    display_name: "Styrofoam Cup"
+    material: PS
+    object_type: styrofoam_cup
+    default_bin: TRASH
+    condition_sensitive: false
+    visual_features:
+      - White foam material
+      - Very lightweight
+      - Cup shape
+      
+  - id: 44
+    name: "styrofoam_piece"
+    display_name: "Styrofoam Piece"
+    material: PS
+    object_type: styrofoam_piece
+    default_bin: TRASH
+    condition_sensitive: false
+    visual_features:
+      - White foam fragments
+      - Packing material
+      - Breaks into beads
+      
+  - id: 45
+    name: "plastic_bag"
+    display_name: "Plastic Bag"
+    material: LDPE
+    object_type: plastic_bag
+    default_bin: TRASH
+    condition_sensitive: false
+    visual_features:
+      - Thin film
+      - Handles usually
+      - Crinkly sound
+    notes: "Return to store for recycling"
+      
+  - id: 46
+    name: "chip_bag"
+    display_name: "Chip Bag"
+    material: COMPOSITE
+    object_type: chip_bag
+    default_bin: TRASH
+    condition_sensitive: false
+    visual_features:
+      - Shiny interior
+      - Colorful exterior
+      - Metallic layer
+      
+  - id: 47
+    name: "snack_wrapper"
+    display_name: "Snack Wrapper"
+    material: COMPOSITE
+    object_type: snack_wrapper
+    default_bin: TRASH
+    condition_sensitive: false
+    visual_features:
+      - Small plastic wrapper
+      - Colorful printing
+      - Crinkly material
+      
+  - id: 48
+    name: "candy_wrapper"
+    display_name: "Candy Wrapper"
+    material: COMPOSITE
+    object_type: candy_wrapper
+    default_bin: TRASH
+    condition_sensitive: false
+    visual_features:
+      - Small wrapper
+      - Often twisted ends
+      - Shiny material
+      
+  - id: 49
+    name: "plastic_straw"
+    display_name: "Plastic Straw"
+    material: PP
+    object_type: plastic_straw
+    default_bin: TRASH
+    condition_sensitive: false
+    visual_features:
+      - Thin tube
+      - Various colors
+      - Bendable section often
+      
+  - id: 50
+    name: "plastic_utensil"
+    display_name: "Plastic Utensil"
+    material: PS
+    object_type: plastic_utensil
+    default_bin: TRASH
+    condition_sensitive: false
+    visual_features:
+      - Fork, knife, spoon shape
+      - White or clear usually
+      - Lightweight
+      
+  - id: 51
+    name: "plastic_film"
+    display_name: "Plastic Film/Wrap"
+    material: LDPE
+    object_type: plastic_film
+    default_bin: TRASH
+    condition_sensitive: false
+    visual_features:
+      - Thin clear wrap
+      - Clingy material
+      - Used for food storage
+      
+  - id: 52
+    name: "cigarette_butt"
+    display_name: "Cigarette Butt"
+    material: COMPOSITE
+    object_type: cigarette_butt
+    default_bin: TRASH
+    condition_sensitive: false
+    visual_features:
+      - Small cylindrical
+      - White filter
+      - Brown tobacco stains
+      
+  - id: 53
+    name: "disposable_glove"
+    display_name: "Disposable Glove"
+    material: COMPOSITE
+    object_type: glove
+    default_bin: TRASH
+    condition_sensitive: false
+    visual_features:
+      - Hand shape
+      - Latex or nitrile
+      - Blue, white, or clear
+      
+  - id: 54
+    name: "face_mask"
+    display_name: "Disposable Face Mask"
+    material: COMPOSITE
+    object_type: face_mask
+    default_bin: TRASH
+    condition_sensitive: false
+    visual_features:
+      - Rectangular shape
+      - Ear loops
+      - Blue or white
+      
+  - id: 55
+    name: "coffee_cup_paper"
+    display_name: "Paper Coffee Cup"
+    material: COMPOSITE
+    object_type: paper_cup
+    default_bin: TRASH
+    condition_sensitive: false
+    visual_features:
+      - Cup shape
+      - Wax/plastic lining inside
+      - Often has sleeve
+    notes: "Not recyclable due to lining"
+      
+  - id: 56
+    name: "tissue"
+    display_name: "Tissue"
+    material: PAPER
+    object_type: tissue
+    default_bin: TRASH
+    condition_sensitive: false
+    visual_features:
+      - Soft paper
+      - Often crumpled
+    notes: "Used tissues go to trash"
+      
+  - id: 57
+    name: "takeout_container"
+    display_name: "Takeout Container (Foam)"
+    material: PS
+    object_type: takeout_container
+    default_bin: TRASH
+    condition_sensitive: false
+    visual_features:
+      - Hinged lid
+      - White foam
+      - Food residue
+      
+  - id: 58
+    name: "battery"
+    display_name: "Battery"
+    material: COMPOSITE
+    object_type: battery
+    default_bin: TRASH
+    condition_sensitive: false
+    visual_features:
+      - Cylindrical or rectangular
+      - Metal contacts
+      - Brand labels
+    notes: "Ideally should go to special e-waste collection"
+      
+  - id: 59
+    name: "trash_misc"
+    display_name: "Miscellaneous Trash"
+    material: OTHER
+    object_type: misc
+    default_bin: TRASH
+    condition_sensitive: false
+    visual_features:
+      - Various non-recyclable items
+      - Mixed materials
+      
+  - id: 60
+    name: "unknown_object"
+    display_name: "Unknown Object"
+    material: UNKNOWN
+    object_type: unknown
+    default_bin: TRASH
+    condition_sensitive: false
+    visual_features:
+      - Cannot identify
+    notes: "When in doubt, trash"
+
+
+# =============================================================================
+# SORTING DECISION RULES
+# =============================================================================
+
+sorting_rules:
+  # Priority order for condition-based overrides
+  condition_priority:
+    - soiled
+    - wet
+    - damaged
+    - crushed
+    - clean
+    
+  # Confidence thresholds
+  thresholds:
+    high_confidence: 0.9    # Direct sort
+    medium_confidence: 0.7  # Sort with flag
+    low_confidence: 0.5     # Review queue
+    reject: 0.3             # Don't sort, alert user
+    
+  # Special handling rules
+  special_cases:
+    # Soiled recyclables go to trash (except paper → compost)
+    - condition: soiled
+      materials: [PET, HDPE, PP, ALUMINUM, STEEL]
+      override_bin: TRASH
+      
+    - condition: soiled
+      materials: [PAPER, CARDBOARD]
+      override_bin: COMPOST
+      
+    # Wet paper goes to trash
+    - condition: wet
+      materials: [PAPER, CARDBOARD]
+      override_bin: TRASH
+      
+    # Broken glass - handle carefully
+    - object_type: broken_glass
+      alert: true
+      message: "Broken glass detected - handle with care"

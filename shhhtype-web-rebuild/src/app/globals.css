@@ -1,0 +1,168 @@
+@import "tailwindcss";
+
+html { overflow-x: hidden; }
+body { overflow-x: hidden; }
+
+/* Prevent any element from exceeding viewport width */
+main, main > * {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+:root {
+  --background: #EBEBEB;
+  --foreground: #111827;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-heading: var(--font-satoshi), system-ui, sans-serif;
+  --font-body: var(--font-general-sans), system-ui, sans-serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-general-sans), system-ui, sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-satoshi), system-ui, sans-serif;
+  letter-spacing: -0.025em;
+}
+
+/* font-montserrat mapped to body font (General Sans) */
+.font-montserrat {
+  font-family: var(--font-general-sans), system-ui, sans-serif;
+}
+
+/* Glass navbar */
+.glass-nav {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* Animations */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes infinite-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+@keyframes waveform {
+  0%, 100% { height: 12px; }
+  50% { height: 28px; }
+}
+
+.animate-fade-up { animation: fadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
+.animate-slide-in { animation: slideInRight 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
+.animate-infinite-scroll { animation: infinite-scroll 40s linear infinite; }
+
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+.delay-500 { animation-delay: 0.5s; }
+.delay-700 { animation-delay: 0.7s; }
+
+/* Marquee edge fade */
+.marquee-mask {
+  mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+}
+
+/* Pause marquee on hover */
+.group:hover .animate-infinite-scroll { animation-play-state: paused; }
+
+/* Selection color */
+::selection { background-color: #f43f5e; color: white; }
+
+/* Waveform bars */
+.wave-bar {
+  width: 3px;
+  border-radius: 2px;
+  background: #f43f5e;
+  animation: waveform 1.2s ease-in-out infinite;
+}
+
+/* Mobile menu */
+.mobile-menu-overlay {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.mobile-menu-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+.mobile-menu-panel {
+  transform: translateY(-100%);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.mobile-menu-overlay.active .mobile-menu-panel {
+  transform: translateY(0);
+}
+
+/* Share Tech Mono style for logo text */
+.font-logo-mono {
+  font-family: var(--font-special-elite), 'Courier New', monospace;
+  letter-spacing: 0;
+}
+
+.bg-dot-grid {
+  background-image: radial-gradient(circle, #d4d4d4 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+@keyframes draw-line {
+  from { stroke-dashoffset: 1000; }
+  to { stroke-dashoffset: 0; }
+}
+
+.animate-draw-line {
+  stroke-dashoffset: 1000;
+  animation: draw-line 1.5s ease-out forwards;
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(244, 63, 94, 0.15), 0 0 60px rgba(244, 63, 94, 0.05);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(244, 63, 94, 0.25), 0 0 80px rgba(244, 63, 94, 0.1);
+  }
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 3s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-glow-pulse {
+    animation: none;
+    box-shadow: 0 0 20px rgba(244, 63, 94, 0.15);
+  }
+  .animate-fade-up,
+  .animate-slide-in {
+    animation: none;
+    opacity: 1;
+  }
+  .animate-infinite-scroll {
+    animation: none;
+  }
+  .wave-bar {
+    animation: none;
+    height: 16px;
+  }
+}

@@ -1,0 +1,241 @@
+<!--
+  Label Studio Configuration for Waste Classification
+  
+  This configuration supports:
+  - Bounding box annotation for object detection
+  - Multi-label classification (Material, Object, Condition)
+  - Hierarchical taxonomy for waste items
+  
+  Usage:
+  1. Create a new project in Label Studio
+  2. Go to Settings → Labeling Interface
+  3. Paste this XML configuration
+  4. Save and start labeling
+-->
+
+<View>
+  <!-- Header with instructions -->
+  <Header value="Waste Item Annotation"/>
+  <Text name="instructions" value="Draw a bounding box around each waste item, then classify its Material, Object type, and Condition."/>
+  
+  <!-- Image display -->
+  <Image name="image" value="$image" zoom="true" zoomControl="true" rotateControl="false"/>
+  
+  <!-- Bounding box labels for main waste categories -->
+  <RectangleLabels name="waste_bbox" toName="image" strokeWidth="2" opacity="0.8">
+    <!-- Main bin categories for quick labeling -->
+    <Label value="plastic" background="#3498db" hotkey="1"/>
+    <Label value="metal" background="#95a5a6" hotkey="2"/>
+    <Label value="glass" background="#27ae60" hotkey="3"/>
+    <Label value="paper" background="#f1c40f" hotkey="4"/>
+    <Label value="compost" background="#8b4513" hotkey="5"/>
+    <Label value="trash" background="#2c3e50" hotkey="6"/>
+    <Label value="unknown" background="#e74c3c" hotkey="7"/>
+  </RectangleLabels>
+  
+  <!-- Material Classification (per region) -->
+  <Header value="Material Type" size="4"/>
+  <Choices name="material" toName="image" perRegion="true" required="true" choice="single">
+    <Header value="Plastics"/>
+    <Choice value="PET" hint="Plastic #1 - Water bottles, food containers"/>
+    <Choice value="HDPE" hint="Plastic #2 - Milk jugs, detergent bottles"/>
+    <Choice value="PVC" hint="Plastic #3 - Pipes, packaging (NOT recyclable)"/>
+    <Choice value="LDPE" hint="Plastic #4 - Bags, squeeze bottles"/>
+    <Choice value="PP" hint="Plastic #5 - Yogurt cups, bottle caps"/>
+    <Choice value="PS" hint="Plastic #6 - Styrofoam (NOT recyclable)"/>
+    <Choice value="OTHER_PLASTIC" hint="Plastic #7 - Mixed plastics"/>
+    
+    <Header value="Metals"/>
+    <Choice value="ALUMINUM" hint="Beverage cans, foil"/>
+    <Choice value="STEEL" hint="Food cans, lids"/>
+    <Choice value="OTHER_METAL" hint="Miscellaneous metals"/>
+    
+    <Header value="Glass"/>
+    <Choice value="GLASS_CLEAR" hint="Clear glass bottles/jars"/>
+    <Choice value="GLASS_GREEN" hint="Green glass"/>
+    <Choice value="GLASS_BROWN" hint="Brown/amber glass"/>
+    
+    <Header value="Paper Products"/>
+    <Choice value="PAPER" hint="Office paper, newspaper, magazines"/>
+    <Choice value="CARDBOARD" hint="Boxes, packaging"/>
+    
+    <Header value="Organic"/>
+    <Choice value="ORGANIC" hint="Food waste, plants"/>
+    
+    <Header value="Other"/>
+    <Choice value="COMPOSITE" hint="Mixed materials (Tetra Pak, chip bags)"/>
+    <Choice value="TEXTILE" hint="Fabric, clothing"/>
+    <Choice value="UNKNOWN" hint="Cannot identify material"/>
+  </Choices>
+  
+  <!-- Object Classification (per region) -->
+  <Header value="Object Type" size="4"/>
+  <Choices name="object" toName="image" perRegion="true" required="true" choice="single">
+    
+    <Header value="Beverage Containers"/>
+    <Choice value="water_bottle"/>
+    <Choice value="soda_bottle"/>
+    <Choice value="juice_bottle"/>
+    <Choice value="sports_drink_bottle"/>
+    <Choice value="milk_jug"/>
+    <Choice value="wine_bottle"/>
+    <Choice value="beer_bottle"/>
+    <Choice value="liquor_bottle"/>
+    <Choice value="soda_can"/>
+    <Choice value="beer_can"/>
+    <Choice value="energy_drink_can"/>
+    <Choice value="sparkling_water_can"/>
+    
+    <Header value="Cups"/>
+    <Choice value="coffee_cup_paper"/>
+    <Choice value="coffee_cup_plastic"/>
+    <Choice value="disposable_cup"/>
+    <Choice value="styrofoam_cup"/>
+    <Choice value="cup_lid"/>
+    <Choice value="cup_sleeve"/>
+    
+    <Header value="Food Containers"/>
+    <Choice value="takeout_container"/>
+    <Choice value="clamshell_container"/>
+    <Choice value="food_tray"/>
+    <Choice value="yogurt_cup"/>
+    <Choice value="ice_cream_container"/>
+    <Choice value="deli_container"/>
+    <Choice value="sauce_container"/>
+    <Choice value="food_can"/>
+    
+    <Header value="Wrappers &amp; Bags"/>
+    <Choice value="candy_wrapper"/>
+    <Choice value="chip_bag"/>
+    <Choice value="snack_wrapper"/>
+    <Choice value="food_wrapper"/>
+    <Choice value="plastic_bag"/>
+    <Choice value="paper_bag"/>
+    
+    <Header value="Boxes"/>
+    <Choice value="pizza_box"/>
+    <Choice value="cereal_box"/>
+    <Choice value="shipping_box"/>
+    <Choice value="food_box"/>
+    <Choice value="juice_box"/>
+    <Choice value="milk_carton"/>
+    <Choice value="egg_carton"/>
+    
+    <Header value="Paper Items"/>
+    <Choice value="office_paper"/>
+    <Choice value="newspaper"/>
+    <Choice value="magazine"/>
+    <Choice value="envelope"/>
+    <Choice value="receipt"/>
+    <Choice value="paper_towel"/>
+    <Choice value="napkin"/>
+    <Choice value="tissue"/>
+    <Choice value="paper_plate"/>
+    
+    <Header value="Food Scraps"/>
+    <Choice value="fruit_peel"/>
+    <Choice value="fruit_core"/>
+    <Choice value="vegetable_scraps"/>
+    <Choice value="egg_shell"/>
+    <Choice value="coffee_grounds"/>
+    <Choice value="coffee_filter"/>
+    <Choice value="tea_bag"/>
+    <Choice value="bread"/>
+    <Choice value="food_leftovers"/>
+    <Choice value="bones"/>
+    
+    <Header value="Plastic Items"/>
+    <Choice value="plastic_straw"/>
+    <Choice value="plastic_utensil"/>
+    <Choice value="plastic_lid"/>
+    <Choice value="bottle_cap"/>
+    <Choice value="plastic_film"/>
+    <Choice value="bubble_wrap"/>
+    <Choice value="styrofoam_piece"/>
+    
+    <Header value="Metal Items"/>
+    <Choice value="aluminum_foil"/>
+    <Choice value="aluminum_tray"/>
+    <Choice value="metal_lid"/>
+    <Choice value="pop_tab"/>
+    <Choice value="aerosol_can"/>
+    
+    <Header value="Glass Items"/>
+    <Choice value="glass_jar"/>
+    <Choice value="glass_container"/>
+    <Choice value="broken_glass"/>
+    
+    <Header value="Miscellaneous"/>
+    <Choice value="cigarette_butt"/>
+    <Choice value="face_mask"/>
+    <Choice value="disposable_glove"/>
+    <Choice value="battery"/>
+    <Choice value="electronics"/>
+    <Choice value="clothing"/>
+    <Choice value="unknown_object"/>
+  </Choices>
+  
+  <!-- Condition Classification (per region) -->
+  <Header value="Condition" size="4"/>
+  <Choices name="condition" toName="image" perRegion="true" required="true" choice="single">
+    <Choice value="clean" hint="No visible contamination, ready for recycling"/>
+    <Choice value="soiled" hint="Food residue or contamination visible"/>
+    <Choice value="wet" hint="Visibly wet or water-damaged"/>
+    <Choice value="crushed" hint="Deformed but still identifiable"/>
+    <Choice value="damaged" hint="Torn, broken, or significantly damaged"/>
+  </Choices>
+  
+  <!-- Additional flags (optional) -->
+  <Header value="Additional Flags (Optional)" size="4"/>
+  <Choices name="flags" toName="image" perRegion="true" required="false" choice="multiple">
+    <Choice value="partially_visible" hint="Object is partially outside frame"/>
+    <Choice value="occluded" hint="Object is partially blocked by another object"/>
+    <Choice value="blurry" hint="Object is out of focus"/>
+    <Choice value="small_object" hint="Object is very small in frame"/>
+    <Choice value="multiple_items" hint="Multiple items grouped together"/>
+    <Choice value="needs_review" hint="Uncertain classification, needs expert review"/>
+  </Choices>
+  
+  <!-- Global image quality flag -->
+  <Header value="Image Quality" size="4"/>
+  <Choices name="image_quality" toName="image" choice="single">
+    <Choice value="good" hint="Clear, well-lit image"/>
+    <Choice value="acceptable" hint="Minor issues but usable for training"/>
+    <Choice value="poor" hint="Significant quality issues"/>
+    <Choice value="unusable" hint="Should not be used for training"/>
+  </Choices>
+  
+  <!-- Notes field for annotators -->
+  <Header value="Notes (Optional)" size="4"/>
+  <TextArea name="notes" toName="image" placeholder="Add any additional notes about this image or annotations..." rows="2" maxSubmissions="1"/>
+  
+</View>
+
+<!--
+  KEYBOARD SHORTCUTS:
+  1 - plastic
+  2 - metal
+  3 - glass
+  4 - paper
+  5 - compost
+  6 - trash
+  7 - unknown
+  
+  LABELING WORKFLOW:
+  1. Draw bounding box around waste item
+  2. Select the quick category (1-7)
+  3. Choose detailed Material type
+  4. Choose specific Object type
+  5. Select Condition
+  6. Add flags if needed
+  7. Repeat for all items in image
+  8. Rate image quality
+  9. Submit annotation
+  
+  IMPORTANT NOTES:
+  - Draw tight bounding boxes that closely fit the object
+  - Label ALL visible waste items, even partially visible ones
+  - Use "unknown" only when truly unidentifiable
+  - Mark "soiled" if there's visible food residue
+  - Use flags to communicate uncertainty to reviewers
+-->

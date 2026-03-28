@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ShhhType - Voice to Text for macOS</title>
+  <meta name="description" content="Press a hotkey, speak, and your words are transcribed and injected into any app. Powered by Groq on macOS.">
+  <link rel="icon" type="image/png" href="assets/images/shhh_logo_thick.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600&family=Montserrat:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    h1, h2, h3, .serif-font { font-family: 'Instrument Serif', serif; }
+    .font-montserrat { font-family: 'Montserrat', sans-serif !important; }
+
+    /* Glass navbar */
+    .glass-nav {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+
+    /* Animations */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes slideInRight {
+      from { opacity: 0; transform: translateX(20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes infinite-scroll {
+      from { transform: translateX(0); }
+      to { transform: translateX(-100%); }
+    }
+    @keyframes waveform {
+      0%, 100% { height: 12px; }
+      50% { height: 28px; }
+    }
+
+    .animate-fade-up { animation: fadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
+    .animate-slide-in { animation: slideInRight 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
+    .animate-infinite-scroll { animation: infinite-scroll 40s linear infinite; }
+
+    .delay-100 { animation-delay: 0.1s; }
+    .delay-200 { animation-delay: 0.2s; }
+    .delay-300 { animation-delay: 0.3s; }
+    .delay-500 { animation-delay: 0.5s; }
+    .delay-700 { animation-delay: 0.7s; }
+
+    /* Marquee edge fade */
+    .marquee-mask {
+      mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+      -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+    }
+
+    /* Pause marquee on hover */
+    .group:hover .animate-infinite-scroll { animation-play-state: paused; }
+
+    /* Selection color */
+    ::selection { background-color: #f43f5e; color: white; }
+
+    /* Waveform bars */
+    .wave-bar {
+      width: 3px;
+      border-radius: 2px;
+      background: #f43f5e;
+      animation: waveform 1.2s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="bg-[#F9F9F9] text-gray-900 antialiased overflow-x-hidden flex flex-col min-h-screen">
+
+  <!-- ==================== 1. NAVBAR ==================== -->
+  <div class="fixed top-6 left-0 right-0 z-50 flex justify-center px-4 animate-fade-up">
+    <nav class="glass-nav border border-gray-200 rounded-full pl-3 pr-2 py-2 flex items-center gap-8 shadow-sm hover:shadow-lg hover:shadow-rose-500/5 transition-all duration-300">
+      <a href="#" class="group flex items-center gap-2.5 text-sm text-gray-900 hover:text-rose-600 transition-colors">
+        <img src="assets/images/shhh_logo_thick.png" alt="ShhhType" class="w-9 h-9">
+        <span style="font-family: 'Share Tech Mono', monospace;" class="text-xl tracking-tight text-gray-900">ShhhType</span>
+      </a>
+      <div class="hidden md:flex items-center gap-6 text-sm font-montserrat font-medium text-gray-500">
+        <a href="#features" class="hover:text-rose-600 transition-colors">Features</a>
+        <a href="#how-it-works" class="hover:text-rose-600 transition-colors">How It Works</a>
+        <a href="#pricing" class="hover:text-rose-600 transition-colors">Pricing</a>
+      </div>
+      <div class="h-4 w-px bg-gray-200 hidden md:block"></div>
+      <a href="https://LEMONSQUEEZY_CHECKOUT_URL" class="group bg-gray-900 text-white text-sm px-5 py-2.5 rounded-full hover:bg-rose-600 hover:shadow-lg hover:shadow-rose-600/30 transition-all duration-300 flex items-center gap-2 font-montserrat font-medium">
+        Buy Now
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 transition-transform group-hover:translate-x-1"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+      </a>
+    </nav>
+  </div>
+
+  <!-- ==================== MAIN CONTAINER ==================== -->
+  <main class="max-w-7xl mx-auto pt-32 px-6 pb-20 flex-grow">
+
+    <!-- ==================== 2. HERO ==================== -->
+    <div class="bg-white rounded-[3rem] p-10 md:p-14 lg:p-16 shadow-sm border border-gray-100 relative overflow-hidden group transition-shadow duration-700">
+      <!-- Subtle Background Grid -->
+      <div class="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] pointer-events-none"></div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center relative z-10">
+        <!-- Left Content -->
+        <div class="lg:col-span-7 flex flex-col justify-center">
+          <!-- Status Badge -->
+          <div class="animate-fade-up delay-100 w-fit inline-flex items-center gap-2.5 bg-white/80 backdrop-blur border border-gray-200 text-gray-600 px-4 py-1.5 rounded-full text-xs font-montserrat font-semibold mb-8 shadow-sm hover:border-rose-200 transition-colors">
+            <span class="relative flex h-2 w-2">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+            </span>
+            MACOS APP V1.0
+          </div>
+
+          <!-- Headline -->
+          <h1 class="animate-fade-up delay-200 text-6xl md:text-7xl lg:text-[5.5rem] leading-[0.95] tracking-tight mb-8 text-gray-900 font-medium">
+            Voice to
+            <span class="italic text-gray-400">Text</span>
+            <br>
+            made
+            <span class="text-transparent bg-clip-text bg-gradient-to-r from-rose-500 to-orange-500">Instant</span>
+            &amp;
+            <br>
+            Private.
+          </h1>
+
+          <!-- Description -->
+          <p class="animate-fade-up delay-300 text-lg md:text-xl text-gray-500 leading-relaxed max-w-lg mb-10 font-montserrat font-medium">
+            Press a hotkey, speak, and your words are transcribed and injected into any app — documents, emails, chat, code editors. Powered by Groq on macOS. Bring your own free Groq API key — their generous free tier handles normal dictation with ease.
+          </p>
+
+          <!-- Buttons -->
+          <div class="animate-fade-up delay-500 flex flex-wrap gap-4 items-center">
+            <a href="https://LEMONSQUEEZY_CHECKOUT_URL" class="bg-gray-900 text-white pl-8 pr-6 py-4 rounded-full text-base hover:bg-rose-600 hover:shadow-lg hover:shadow-rose-600/20 transition-all duration-300 flex items-center gap-3 font-montserrat font-medium group/btn">
+              Buy Now — $29
+              <div class="bg-white/20 rounded-full p-1 group-hover/btn:bg-white/30 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 group-hover/btn:translate-x-0.5 transition-transform"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+              </div>
+            </a>
+            <a href="#features" class="text-gray-600 px-6 py-4 rounded-full text-base hover:text-gray-900 transition-all duration-300 font-montserrat font-medium flex items-center gap-2 group/link">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-gray-400 group-hover/link:text-gray-900 transition-colors"><path d="m6 9 6 6 6-6"></path></svg>
+              See Features
+            </a>
+          </div>
+        </div>
+
+        <!-- Right Visual: 4-Step Flow -->
+        <div class="lg:col-span-5 relative h-[500px] lg:h-[600px] w-full animate-slide-in delay-300">
+          <!-- Decorative offset background -->
+          <div class="absolute top-10 right-10 w-full h-full bg-orange-100/50 rounded-[2rem] -rotate-3 z-0 hidden md:block"></div>
+
+          <!-- Main Container -->
+          <div class="relative h-full w-full bg-gradient-to-br from-orange-50/80 via-white to-rose-50/80 rounded-[2rem] overflow-hidden shadow-2xl border border-orange-100/50 z-10 flex flex-col items-center justify-center p-8 gap-4">
+            <!-- Background pattern -->
+            <div class="absolute inset-0 bg-[radial-gradient(#f43f5e_1px,transparent_1px)] [background-size:20px_20px] opacity-[0.05]"></div>
+
+            <!-- Floating Badge Top Right -->
+            <div class="absolute top-16 right-8 z-30 animate-fade-up delay-500 hidden md:block">
+              <div class="bg-orange-100/90 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-orange-200/50 rotate-12 hover:rotate-0 transition-transform duration-500 cursor-pointer">
+                <i data-lucide="mic" class="w-7 h-7 text-orange-600"></i>
+              </div>
+            </div>
+
+            <!-- Floating Badge Bottom Left -->
+            <div class="absolute bottom-16 left-8 z-30 animate-fade-up delay-700 hidden md:block">
+              <div class="bg-orange-100/90 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-orange-200/50 -rotate-12 hover:rotate-0 transition-transform duration-500 cursor-pointer">
+                <i data-lucide="sparkles" class="w-7 h-7 text-orange-600"></i>
+              </div>
+            </div>
+
+            <!-- Step Cards -->
+            <div class="relative z-20 w-full max-w-sm space-y-3">
+              <!-- Step 1 -->
+              <div class="flex items-center gap-4 bg-white rounded-2xl p-4 shadow-md border border-gray-100 hover:shadow-lg transition-shadow">
+                <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center text-white flex-shrink-0">
+                  <i data-lucide="command" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <p class="text-sm font-montserrat font-bold text-gray-900">Press Cmd+Alt+V</p>
+                  <p class="text-xs text-gray-500 font-montserrat mt-0.5">Global hotkey triggers recording</p>
+                </div>
+              </div>
+              <!-- Step 2 -->
+              <div class="flex items-center gap-4 bg-white rounded-2xl p-4 shadow-md border border-gray-100 hover:shadow-lg transition-shadow">
+                <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center text-white flex-shrink-0">
+                  <i data-lucide="mic" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <p class="text-sm font-montserrat font-bold text-gray-900">Speak naturally</p>
+                  <p class="text-xs text-gray-500 font-montserrat mt-0.5">VAD auto-detects when you stop</p>
+                </div>
+              </div>
+              <!-- Step 3 -->
+              <div class="flex items-center gap-4 bg-white rounded-2xl p-4 shadow-md border border-gray-100 hover:shadow-lg transition-shadow">
+                <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center text-white flex-shrink-0">
+                  <i data-lucide="zap" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <p class="text-sm font-montserrat font-bold text-gray-900">Text appears instantly</p>
+                  <p class="text-xs text-gray-500 font-montserrat mt-0.5">Injected into any focused app</p>
+                </div>
+              </div>
+              <!-- Step 4 -->
+              <div class="flex items-center gap-4 bg-white rounded-2xl p-4 shadow-md border border-gray-100 hover:shadow-lg transition-shadow">
+                <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center text-white flex-shrink-0">
+                  <i data-lucide="sparkles" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <p class="text-sm font-montserrat font-bold text-gray-900">AI polishes your text</p>
+                  <p class="text-xs text-gray-500 font-montserrat mt-0.5">Rewrite in 4 styles with Cmd+Alt+R</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 3. HOW IT WORKS ==================== -->
+    <div id="how-it-works" class="py-24">
+      <h2 class="text-4xl md:text-5xl text-center mb-16 tracking-tight text-gray-900 font-montserrat font-semibold">How It Works</h2>
+      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <!-- Step 1: Trigger -->
+        <div class="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-gray-200/40 transition-all duration-300 group flex flex-col">
+          <div class="w-12 h-12 rounded-full bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center text-white text-lg font-montserrat font-bold mb-6">1</div>
+          <div class="h-20 w-full bg-[#FFE4D6] rounded-2xl flex items-center justify-center mb-6 text-orange-500 transition-transform group-hover:scale-[1.02] duration-500">
+            <i data-lucide="keyboard" class="w-10 h-10"></i>
+          </div>
+          <h3 class="text-xl font-montserrat font-semibold text-gray-900 mb-3 tracking-tight">Trigger</h3>
+          <p class="text-sm text-gray-500 font-montserrat font-medium leading-relaxed mb-4">Press <code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded">Cmd+Alt+V</code> from any app.</p>
+          <div class="mt-auto flex gap-1.5">
+            <span class="inline-flex items-center justify-center bg-gray-100 text-gray-700 text-xs font-mono font-bold px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-sm">&#8984;</span>
+            <span class="inline-flex items-center justify-center bg-gray-100 text-gray-700 text-xs font-mono font-bold px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-sm">&#8997;</span>
+            <span class="inline-flex items-center justify-center bg-gray-100 text-gray-700 text-xs font-mono font-bold px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-sm">V</span>
+          </div>
+        </div>
+
+        <!-- Step 2: Speak -->
+        <div class="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-gray-200/40 transition-all duration-300 group flex flex-col">
+          <div class="w-12 h-12 rounded-full bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center text-white text-lg font-montserrat font-bold mb-6">2</div>
+          <div class="h-20 w-full bg-[#E0E7FF] rounded-2xl flex items-center justify-center mb-6 text-indigo-500 transition-transform group-hover:scale-[1.02] duration-500">
+            <i data-lucide="mic" class="w-10 h-10"></i>
+          </div>
+          <h3 class="text-xl font-montserrat font-semibold text-gray-900 mb-3 tracking-tight">Speak</h3>
+          <p class="text-sm text-gray-500 font-montserrat font-medium leading-relaxed mb-4">Talk naturally. Silence detection stops recording automatically.</p>
+          <div class="mt-auto flex items-end gap-1 h-8">
+            <div class="wave-bar opacity-40" style="animation-delay: 0s;"></div>
+            <div class="wave-bar opacity-60" style="animation-delay: 0.15s;"></div>
+            <div class="wave-bar opacity-80" style="animation-delay: 0.3s;"></div>
+            <div class="wave-bar" style="animation-delay: 0.45s;"></div>
+            <div class="wave-bar opacity-70" style="animation-delay: 0.6s;"></div>
+            <div class="wave-bar opacity-50" style="animation-delay: 0.75s;"></div>
+            <div class="wave-bar opacity-90" style="animation-delay: 0.9s;"></div>
+            <div class="wave-bar opacity-30" style="animation-delay: 1.05s;"></div>
+          </div>
+        </div>
+
+        <!-- Step 3: Transcribe -->
+        <div class="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-gray-200/40 transition-all duration-300 group flex flex-col">
+          <div class="w-12 h-12 rounded-full bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center text-white text-lg font-montserrat font-bold mb-6">3</div>
+          <div class="h-20 w-full bg-[#FFE4D6] rounded-2xl flex items-center justify-center mb-6 text-orange-500 transition-transform group-hover:scale-[1.02] duration-500">
+            <i data-lucide="zap" class="w-10 h-10"></i>
+          </div>
+          <h3 class="text-xl font-montserrat font-semibold text-gray-900 mb-3 tracking-tight">Transcribe</h3>
+          <p class="text-sm text-gray-500 font-montserrat font-medium leading-relaxed mb-4">Groq cloud processes your audio in under a second.</p>
+          <div class="mt-auto bg-gray-900 rounded-xl px-4 py-2.5">
+            <p class="text-xs font-mono text-green-400">&rarr; "Schedule the meeting for Tuesday at 3pm"</p>
+          </div>
+        </div>
+
+        <!-- Step 4: Polish -->
+        <div class="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-gray-200/40 transition-all duration-300 group flex flex-col">
+          <div class="w-12 h-12 rounded-full bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center text-white text-lg font-montserrat font-bold mb-6">4</div>
+          <div class="h-20 w-full bg-[#E0E7FF] rounded-2xl flex items-center justify-center mb-6 text-indigo-500 transition-transform group-hover:scale-[1.02] duration-500">
+            <i data-lucide="sparkles" class="w-10 h-10"></i>
+          </div>
+          <h3 class="text-xl font-montserrat font-semibold text-gray-900 mb-3 tracking-tight">Polish</h3>
+          <p class="text-sm text-gray-500 font-montserrat font-medium leading-relaxed mb-4">AI rewrites your text in your chosen style.</p>
+          <div class="mt-auto flex items-center gap-2">
+            <span class="text-xs font-montserrat font-medium text-gray-400 line-through">casual</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-rose-500"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+            <span class="text-xs font-montserrat font-semibold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-full">Professional</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 4. FEATURE CARDS ==================== -->
+    <div id="features" class="py-24">
+      <h2 class="text-4xl md:text-5xl text-center mb-16 tracking-tight text-gray-900 font-montserrat font-semibold">Features</h2>
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <!-- Card 1: Global Hotkey -->
+        <div class="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-gray-200/40 transition-all duration-300 group flex flex-col h-full">
+          <div class="h-44 w-full bg-[#FFE4D6] rounded-2xl flex items-center justify-center mb-8 text-orange-500 transition-transform group-hover:scale-[1.02] duration-500">
+            <i data-lucide="keyboard" class="w-12 h-12"></i>
+          </div>
+          <h3 class="text-2xl font-montserrat font-semibold text-gray-900 mb-4 tracking-tight">Global Hotkey</h3>
+          <p class="text-base text-gray-500 font-montserrat font-medium leading-relaxed mb-6">Push-to-talk or toggle mode. Works from any app — documents, emails, chat, code editors, browsers.</p>
+          <div class="mt-auto pt-2">
+            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-6">Configurable &middot; Universal</p>
+            <a href="https://LEMONSQUEEZY_CHECKOUT_URL" class="w-full bg-[#1A2626] text-white h-12 rounded-xl flex items-center justify-center gap-2.5 font-montserrat font-semibold hover:bg-gray-800 transition-all shadow-md hover:shadow-lg active:scale-[0.98]">Buy Now</a>
+          </div>
+        </div>
+
+        <!-- Card 2: Privacy First -->
+        <div class="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-gray-200/40 transition-all duration-300 group flex flex-col h-full">
+          <div class="h-44 w-full bg-[#E0E7FF] rounded-2xl flex items-center justify-center mb-8 text-indigo-500 transition-transform group-hover:scale-[1.02] duration-500">
+            <i data-lucide="lock" class="w-12 h-12"></i>
+          </div>
+          <h3 class="text-2xl font-montserrat font-semibold text-gray-900 mb-4 tracking-tight">Privacy First</h3>
+          <p class="text-base text-gray-500 font-montserrat font-medium leading-relaxed mb-6">Local mode keeps everything on-device. Cloud mode sends only audio to Groq — nothing else leaves your machine.</p>
+          <div class="mt-auto pt-2">
+            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-6">On-device &middot; Secure</p>
+            <a href="https://LEMONSQUEEZY_CHECKOUT_URL" class="w-full bg-[#1A2626] text-white h-12 rounded-xl flex items-center justify-center gap-2.5 font-montserrat font-semibold hover:bg-gray-800 transition-all shadow-md hover:shadow-lg active:scale-[0.98]">Buy Now</a>
+          </div>
+        </div>
+
+        <!-- Card 3: Blazing Fast -->
+        <div class="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-gray-200/40 transition-all duration-300 group flex flex-col h-full">
+          <div class="h-44 w-full bg-[#FFE4D6] rounded-2xl flex items-center justify-center mb-8 text-orange-500 transition-transform group-hover:scale-[1.02] duration-500">
+            <i data-lucide="zap" class="w-12 h-12"></i>
+          </div>
+          <h3 class="text-2xl font-montserrat font-semibold text-gray-900 mb-4 tracking-tight">Blazing Fast</h3>
+          <p class="text-base text-gray-500 font-montserrat font-medium leading-relaxed mb-6">Groq cloud transcription returns results in under a second. Metal GPU accelerates local mode on Apple Silicon.</p>
+          <div class="mt-auto pt-2">
+            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-6">Sub-second &middot; Optimized</p>
+            <a href="https://LEMONSQUEEZY_CHECKOUT_URL" class="w-full bg-[#1A2626] text-white h-12 rounded-xl flex items-center justify-center gap-2.5 font-montserrat font-semibold hover:bg-gray-800 transition-all shadow-md hover:shadow-lg active:scale-[0.98]">Buy Now</a>
+          </div>
+        </div>
+
+        <!-- Card 4: AI Rewrite -->
+        <div class="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-gray-200/40 transition-all duration-300 group flex flex-col h-full">
+          <div class="h-44 w-full bg-[#E0E7FF] rounded-2xl flex items-center justify-center mb-8 text-indigo-500 transition-transform group-hover:scale-[1.02] duration-500">
+            <i data-lucide="sparkles" class="w-12 h-12"></i>
+          </div>
+          <h3 class="text-2xl font-montserrat font-semibold text-gray-900 mb-4 tracking-tight">AI Rewrite</h3>
+          <p class="text-base text-gray-500 font-montserrat font-medium leading-relaxed mb-6">Polish transcriptions with 4 styles: Professional, Casual, Concise, Friendly. One hotkey, instant results.</p>
+          <div class="mt-auto pt-2">
+            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-6">Llama 3.3 70B &middot; Smart</p>
+            <a href="https://LEMONSQUEEZY_CHECKOUT_URL" class="w-full bg-[#1A2626] text-white h-12 rounded-xl flex items-center justify-center gap-2.5 font-montserrat font-semibold hover:bg-gray-800 transition-all shadow-md hover:shadow-lg active:scale-[0.98]">Buy Now</a>
+          </div>
+        </div>
+
+        <!-- Card 5: 9 Languages -->
+        <div class="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-gray-200/40 transition-all duration-300 group flex flex-col h-full">
+          <div class="h-44 w-full bg-[#FFE4D6] rounded-2xl flex items-center justify-center mb-8 text-orange-500 transition-transform group-hover:scale-[1.02] duration-500">
+            <i data-lucide="globe" class="w-12 h-12"></i>
+          </div>
+          <h3 class="text-2xl font-montserrat font-semibold text-gray-900 mb-4 tracking-tight">9 Languages + Auto-detect</h3>
+          <p class="text-base text-gray-500 font-montserrat font-medium leading-relaxed mb-6">English, Spanish, French, German, Italian, Portuguese, Japanese, Korean, Chinese — plus automatic language detection.</p>
+          <div class="mt-auto pt-2">
+            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-6">Multilingual &middot; Auto-detect</p>
+            <a href="https://LEMONSQUEEZY_CHECKOUT_URL" class="w-full bg-[#1A2626] text-white h-12 rounded-xl flex items-center justify-center gap-2.5 font-montserrat font-semibold hover:bg-gray-800 transition-all shadow-md hover:shadow-lg active:scale-[0.98]">Buy Now</a>
+          </div>
+        </div>
+
+        <!-- Card 6: Smart History -->
+        <div class="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-gray-200/40 transition-all duration-300 group flex flex-col h-full">
+          <div class="h-44 w-full bg-[#E0E7FF] rounded-2xl flex items-center justify-center mb-8 text-indigo-500 transition-transform group-hover:scale-[1.02] duration-500">
+            <i data-lucide="clock" class="w-12 h-12"></i>
+          </div>
+          <h3 class="text-2xl font-montserrat font-semibold text-gray-900 mb-4 tracking-tight">Smart History</h3>
+          <p class="text-base text-gray-500 font-montserrat font-medium leading-relaxed mb-6">Searchable transcription history with JSON export. Custom dictionary corrects terms automatically.</p>
+          <div class="mt-auto pt-2">
+            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-6">Searchable &middot; Exportable</p>
+            <a href="https://LEMONSQUEEZY_CHECKOUT_URL" class="w-full bg-[#1A2626] text-white h-12 rounded-xl flex items-center justify-center gap-2.5 font-montserrat font-semibold hover:bg-gray-800 transition-all shadow-md hover:shadow-lg active:scale-[0.98]">Buy Now</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 5. LOCAL VS CLOUD ==================== -->
+    <div class="py-24">
+      <div class="max-w-6xl mx-auto">
+        <div class="text-center mb-16">
+          <h2 class="text-4xl md:text-5xl tracking-tight text-gray-900 font-serif mb-6">
+            Two Modes, <span class="italic text-gray-400">One App</span>
+          </h2>
+          <p class="text-lg text-gray-500 font-montserrat font-medium max-w-2xl mx-auto">
+            Cloud is the default for speed and accuracy. Local mode is there when you need full privacy.
+          </p>
+        </div>
+
+        <div class="bg-white rounded-[2.5rem] border border-gray-200 shadow-xl shadow-gray-200/40 overflow-hidden">
+          <div class="grid md:grid-cols-2">
+            <!-- Cloud (Groq) -->
+            <div class="p-10 md:p-12 border-b md:border-b-0 md:border-r border-gray-100">
+              <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center text-green-600">
+                  <i data-lucide="check" class="w-5 h-5"></i>
+                </div>
+                <h3 class="text-2xl font-montserrat font-semibold text-gray-900">Cloud (Groq)</h3>
+              </div>
+              <span class="inline-block mb-8 text-xs font-montserrat font-bold text-rose-600 bg-rose-50 px-3 py-1 rounded-full border border-rose-100">RECOMMENDED</span>
+              <div class="space-y-6">
+                <div>
+                  <h4 class="text-base font-bold text-gray-900 font-montserrat mb-1">Whisper Large V3 Turbo</h4>
+                  <p class="text-sm text-gray-500 font-medium font-montserrat leading-relaxed">State-of-the-art speech recognition model.</p>
+                </div>
+                <div>
+                  <h4 class="text-base font-bold text-gray-900 font-montserrat mb-1">Sub-second Transcription</h4>
+                  <p class="text-sm text-gray-500 font-medium font-montserrat leading-relaxed">Results appear almost instantly after you stop speaking.</p>
+                </div>
+                <div>
+                  <h4 class="text-base font-bold text-gray-900 font-montserrat mb-1">No Model Download</h4>
+                  <p class="text-sm text-gray-500 font-medium font-montserrat leading-relaxed">Start transcribing immediately — nothing to install.</p>
+                </div>
+                <div>
+                  <h4 class="text-base font-bold text-gray-900 font-montserrat mb-1">AI Rewrite Enabled</h4>
+                  <p class="text-sm text-gray-500 font-medium font-montserrat leading-relaxed">Polish your text with Llama 3.3 70B in one hotkey.</p>
+                </div>
+                <div>
+                  <h4 class="text-base font-bold text-gray-900 font-montserrat mb-1">Free Groq API Key Required</h4>
+                  <p class="text-sm text-gray-500 font-medium font-montserrat leading-relaxed">Bring your own free Groq API key (takes 30 seconds to get). The generous Groq free tier is more than enough for normal dictation use.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Local (Whisper) -->
+            <div class="p-10 md:p-12 bg-gray-50/50">
+              <div class="flex items-center gap-3 mb-8">
+                <div class="w-10 h-10 rounded-full bg-gray-200/50 flex items-center justify-center text-gray-500">
+                  <i data-lucide="info" class="w-5 h-5"></i>
+                </div>
+                <h3 class="text-2xl font-montserrat font-semibold text-gray-900">Local (Whisper)</h3>
+              </div>
+              <div class="space-y-6">
+                <div>
+                  <h4 class="text-base font-bold text-gray-900 font-montserrat mb-1">On-device via whisper.cpp</h4>
+                  <p class="text-sm text-gray-500 font-medium font-montserrat leading-relaxed">Everything runs locally on your Mac.</p>
+                </div>
+                <div>
+                  <h4 class="text-base font-bold text-gray-900 font-montserrat mb-1">Metal GPU Acceleration</h4>
+                  <p class="text-sm text-gray-500 font-medium font-montserrat leading-relaxed">Optimized for Apple Silicon M-series chips.</p>
+                </div>
+                <div>
+                  <h4 class="text-base font-bold text-gray-900 font-montserrat mb-1">Multiple Model Sizes</h4>
+                  <p class="text-sm text-gray-500 font-medium font-montserrat leading-relaxed">From Tiny (75MB) to Large V3 (3.1GB) — pick your balance.</p>
+                </div>
+                <div>
+                  <h4 class="text-base font-bold text-gray-900 font-montserrat mb-1">Fully Offline</h4>
+                  <p class="text-sm text-gray-500 font-medium font-montserrat leading-relaxed">Zero data leaves your machine. Complete privacy.</p>
+                </div>
+                <div>
+                  <h4 class="text-base font-bold text-gray-900 font-montserrat mb-1">Slower on Larger Models</h4>
+                  <p class="text-sm text-gray-500 font-medium font-montserrat leading-relaxed">Transcription time depends on model size and hardware.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="bg-[#1A2626] p-8 md:p-10 text-center border-t border-gray-800/30">
+            <p class="text-gray-300 font-montserrat font-medium text-sm md:text-base leading-relaxed max-w-4xl mx-auto">
+              We recommend Cloud mode for the best experience — Groq's free tier handles normal dictation easily. Just bring your own free API key. Switch to Local anytime in Settings for full offline privacy.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 6. AI REWRITE SHOWCASE ==================== -->
+    <div class="bg-gray-900 rounded-[3rem] p-10 md:p-16 lg:p-20 relative overflow-hidden shadow-2xl">
+      <!-- Background Effects -->
+      <div class="absolute top-0 right-0 w-[500px] h-[500px] bg-rose-500/10 rounded-full blur-[120px] pointer-events-none"></div>
+      <div class="absolute bottom-0 left-0 w-[400px] h-[400px] bg-blue-500/10 rounded-full blur-[100px] pointer-events-none"></div>
+
+      <div class="relative z-10">
+        <div class="inline-flex items-center gap-2 rounded-full border border-gray-700 bg-gray-800/50 px-4 py-1 text-xs font-montserrat font-semibold text-rose-400 mb-8">
+          <span class="inline-flex h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+          AI REWRITE
+        </div>
+
+        <div class="grid lg:grid-cols-2 gap-16 items-start">
+          <div>
+            <h2 class="text-4xl md:text-5xl text-white mb-6 tracking-tight font-medium">
+              Your Voice,<br>
+              <span class="text-gray-400 italic">Polished.</span>
+            </h2>
+            <p class="text-lg text-gray-400 mb-10 leading-relaxed font-montserrat">
+              Rewrite transcriptions with a single hotkey. Four styles. Instant results.
+            </p>
+
+            <div class="space-y-6">
+              <div class="flex gap-4">
+                <div class="bg-gray-800 p-3 rounded-xl h-fit">
+                  <i data-lucide="palette" class="w-5 h-5 text-rose-400"></i>
+                </div>
+                <div>
+                  <h4 class="text-white text-lg font-semibold font-montserrat">Style Selector</h4>
+                  <p class="text-gray-500 text-sm mt-1 font-montserrat">Professional, Casual, Concise, Friendly — pick your tone.</p>
+                </div>
+              </div>
+              <div class="flex gap-4">
+                <div class="bg-gray-800 p-3 rounded-xl h-fit">
+                  <i data-lucide="layers" class="w-5 h-5 text-rose-400"></i>
+                </div>
+                <div>
+                  <h4 class="text-white text-lg font-semibold font-montserrat">Composition Buffer</h4>
+                  <p class="text-gray-500 text-sm mt-1 font-montserrat">Accumulates segments across recordings for longer rewrites.</p>
+                </div>
+              </div>
+              <div class="flex gap-4">
+                <div class="bg-gray-800 p-3 rounded-xl h-fit">
+                  <i data-lucide="zap" class="w-5 h-5 text-rose-400"></i>
+                </div>
+                <div>
+                  <h4 class="text-white text-lg font-semibold font-montserrat">One Hotkey</h4>
+                  <p class="text-gray-500 text-sm mt-1 font-montserrat">Press Cmd+Alt+R to rewrite instantly.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-12 flex gap-4">
+              <a href="https://LEMONSQUEEZY_CHECKOUT_URL" class="bg-white text-gray-900 px-6 py-3 rounded-full font-semibold hover:bg-rose-50 transition-colors font-montserrat">Buy Now — $29</a>
+              <a href="#pricing" class="border border-gray-700 text-white px-6 py-3 rounded-full font-semibold hover:bg-gray-800 transition-colors font-montserrat">See Pricing</a>
+            </div>
+          </div>
+
+          <!-- Terminal-style card -->
+          <div class="bg-gray-800/50 backdrop-blur border border-gray-700 rounded-3xl p-8 font-mono text-sm text-gray-300">
+            <div class="flex gap-2 mb-6">
+              <div class="w-3 h-3 rounded-full bg-red-500"></div>
+              <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+              <div class="w-3 h-3 rounded-full bg-green-500"></div>
+            </div>
+            <p class="text-gray-500 mb-2">// Voice input:</p>
+            <p class="text-orange-300 mb-6 leading-relaxed">"ok so basically the meeting is moved to tuesday and we need to update the client on the timeline changes asap"</p>
+            <p class="text-gray-500 mb-2">// &rarr; Professional rewrite:</p>
+            <p class="text-green-400 leading-relaxed">"The meeting has been rescheduled to Tuesday. We need to promptly update the client regarding the revised timeline."</p>
+
+            <div class="mt-8 pt-6 border-t border-gray-700">
+              <div class="flex gap-2 mb-6">
+                <span class="px-3 py-1.5 rounded-lg bg-rose-500/20 border border-rose-500/30 text-xs font-semibold text-rose-400">Professional</span>
+                <span class="px-3 py-1.5 rounded-lg bg-gray-700/50 border border-gray-600/30 text-xs font-medium text-gray-400">Casual</span>
+                <span class="px-3 py-1.5 rounded-lg bg-gray-700/50 border border-gray-600/30 text-xs font-medium text-gray-400">Concise</span>
+                <span class="px-3 py-1.5 rounded-lg bg-gray-700/50 border border-gray-600/30 text-xs font-medium text-gray-400">Friendly</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span class="text-gray-500 text-xs">Powered by Llama 3.3 70B</span>
+                <span class="text-green-400 text-xs font-semibold">Ready</span>
+              </div>
+              <div class="w-full bg-gray-700 h-1.5 rounded-full mt-2">
+                <div class="bg-green-500 h-1.5 rounded-full w-full"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 7. PRO/PREMIUM SECTION ==================== -->
+    <div class="bg-gray-900 rounded-[3rem] p-10 md:p-16 lg:p-20 relative overflow-hidden shadow-2xl mt-12">
+      <!-- Background Effects -->
+      <div class="absolute top-0 left-0 w-[500px] h-[500px] bg-orange-500/10 rounded-full blur-[120px] pointer-events-none"></div>
+      <div class="absolute bottom-0 right-0 w-[400px] h-[400px] bg-rose-500/10 rounded-full blur-[100px] pointer-events-none"></div>
+
+      <div class="relative z-10">
+        <div class="inline-flex items-center gap-2 rounded-full border border-gray-700 bg-gray-800/50 px-4 py-1 text-xs font-montserrat font-semibold text-rose-400 mb-8">
+          <span class="inline-flex h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+          PRO VERSION
+        </div>
+
+        <div class="grid lg:grid-cols-2 gap-16 items-start">
+          <div>
+            <h2 class="text-4xl md:text-5xl text-white mb-6 tracking-tight font-medium">
+              Unlimited Cloud<br>
+              <span class="text-gray-400 italic">Transcription &amp; AI Rewrite.</span>
+            </h2>
+            <p class="text-lg text-gray-400 mb-10 leading-relaxed font-montserrat">
+              The Early Adopter deal won't last forever. Lock in unlimited access before we switch to monthly pricing.
+            </p>
+
+            <div class="space-y-6">
+              <div class="flex gap-4">
+                <div class="bg-gray-800 p-3 rounded-xl h-fit">
+                  <i data-lucide="infinity" class="w-5 h-5 text-rose-400"></i>
+                </div>
+                <div>
+                  <h4 class="text-white text-lg font-semibold font-montserrat">Cloud Transcription</h4>
+                  <p class="text-gray-500 text-sm mt-1 font-montserrat">Powered by Groq's generous free tier — more than enough for daily use. Bring your own free API key.</p>
+                </div>
+              </div>
+              <div class="flex gap-4">
+                <div class="bg-gray-800 p-3 rounded-xl h-fit">
+                  <i data-lucide="sparkles" class="w-5 h-5 text-rose-400"></i>
+                </div>
+                <div>
+                  <h4 class="text-white text-lg font-semibold font-montserrat">AI Rewrite Included</h4>
+                  <p class="text-gray-500 text-sm mt-1 font-montserrat">All 4 styles, composition buffer, Llama 3.3 70B.</p>
+                </div>
+              </div>
+              <div class="flex gap-4">
+                <div class="bg-gray-800 p-3 rounded-xl h-fit">
+                  <i data-lucide="globe" class="w-5 h-5 text-rose-400"></i>
+                </div>
+                <div>
+                  <h4 class="text-white text-lg font-semibold font-montserrat">All 9 Languages</h4>
+                  <p class="text-gray-500 text-sm mt-1 font-montserrat">Plus auto-detect.</p>
+                </div>
+              </div>
+              <div class="flex gap-4">
+                <div class="bg-gray-800 p-3 rounded-xl h-fit">
+                  <i data-lucide="refresh-cw" class="w-5 h-5 text-rose-400"></i>
+                </div>
+                <div>
+                  <h4 class="text-white text-lg font-semibold font-montserrat">Lifetime v1.x Updates</h4>
+                  <p class="text-gray-500 text-sm mt-1 font-montserrat">Early adopters get all updates through v1.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-12 flex gap-4">
+              <a href="https://LEMONSQUEEZY_CHECKOUT_URL" class="bg-white text-gray-900 px-6 py-3 rounded-full font-semibold hover:bg-rose-50 transition-colors font-montserrat">Buy Now — $29</a>
+              <a href="#pricing" class="border border-gray-700 text-white px-6 py-3 rounded-full font-semibold hover:bg-gray-800 transition-colors font-montserrat">Learn More</a>
+            </div>
+          </div>
+
+          <!-- Terminal-style license card -->
+          <div class="bg-gray-800/50 backdrop-blur border border-gray-700 rounded-3xl p-8 font-mono text-sm text-gray-300">
+            <div class="flex gap-2 mb-6">
+              <div class="w-3 h-3 rounded-full bg-red-500"></div>
+              <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+              <div class="w-3 h-3 rounded-full bg-green-500"></div>
+            </div>
+            <p class="text-gray-500 mb-4">// ShhhType License</p>
+            <p><span class="text-purple-400">plan</span>: <span class="text-green-400">"Early Adopter"</span></p>
+            <p><span class="text-purple-400">price</span>: <span class="text-green-400">"$29 one-time"</span></p>
+            <p><span class="text-purple-400">cloud_transcription</span>: <span class="text-orange-300">groq_free_tier</span></p>
+            <p><span class="text-purple-400">groq_api_key</span>: <span class="text-green-400">"bring your own (free)"</span></p>
+            <p><span class="text-purple-400">ai_rewrite</span>: <span class="text-orange-300">enabled</span></p>
+            <p><span class="text-purple-400">languages</span>: <span class="text-orange-300">9 + auto-detect</span></p>
+            <p><span class="text-purple-400">updates</span>: <span class="text-green-400">"all v1.x releases"</span></p>
+
+            <div class="mt-8 pt-6 border-t border-gray-700">
+              <div class="flex justify-between items-center mb-2">
+                <span class="text-gray-400 text-xs">Early Adopter Spots</span>
+                <span class="text-orange-400 text-xs font-semibold">Filling up</span>
+              </div>
+              <div class="w-full bg-gray-700 h-2 rounded-full">
+                <div class="bg-gradient-to-r from-rose-500 to-orange-500 h-2 rounded-full w-[72%]"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 8. MARQUEE ==================== -->
+    <div class="w-full py-12 mt-8 overflow-hidden marquee-mask relative group bg-transparent">
+      <div class="flex w-[200%] animate-infinite-scroll hover:[animation-play-state:paused]">
+        <div class="flex items-center justify-around w-1/2 gap-16 px-8">
+          <div class="flex items-center gap-3 text-gray-400 hover:text-rose-600 transition-colors duration-300">
+            <i data-lucide="cpu" class="w-8 h-8"></i>
+            <span class="text-lg font-montserrat font-semibold">Groq</span>
+          </div>
+          <div class="flex items-center gap-3 text-gray-400 hover:text-orange-600 transition-colors duration-300">
+            <i data-lucide="audio-waveform" class="w-8 h-8"></i>
+            <span class="text-lg font-montserrat font-semibold">Whisper</span>
+          </div>
+          <div class="flex items-center gap-3 text-gray-400 hover:text-gray-900 transition-colors duration-300">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-8 h-8"><path d="M12 2a8.4 8.4 0 0 0-2.2.3 7.5 7.5 0 0 0-4.6 3.5A8.3 8.3 0 0 0 4 9.5c0 1.4.3 2.6.8 3.7.5 1 1.2 1.8 2 2.6l.6.5c.3.3.5.7.6 1.1V20a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.6c.1-.4.3-.8.6-1.1l.6-.5c.8-.8 1.5-1.6 2-2.6.5-1.1.8-2.3.8-3.7a8.3 8.3 0 0 0-1.2-3.7 7.5 7.5 0 0 0-4.6-3.5A8.4 8.4 0 0 0 12 2z"/></svg>
+            <span class="text-lg font-montserrat font-semibold">Apple Silicon</span>
+          </div>
+          <div class="flex items-center gap-3 text-gray-400 hover:text-blue-600 transition-colors duration-300">
+            <i data-lucide="layers" class="w-8 h-8"></i>
+            <span class="text-lg font-montserrat font-semibold">Tauri</span>
+          </div>
+          <div class="flex items-center gap-3 text-gray-400 hover:text-orange-600 transition-colors duration-300">
+            <i data-lucide="cog" class="w-8 h-8"></i>
+            <span class="text-lg font-montserrat font-semibold">Rust</span>
+          </div>
+          <div class="flex items-center gap-3 text-gray-400 hover:text-purple-600 transition-colors duration-300">
+            <i data-lucide="brain" class="w-8 h-8"></i>
+            <span class="text-lg font-montserrat font-semibold">Llama 3.3</span>
+          </div>
+        </div>
+        <!-- Duplicate for infinite scroll -->
+        <div class="flex items-center justify-around w-1/2 gap-16 px-8">
+          <div class="flex items-center gap-3 text-gray-400 hover:text-rose-600 transition-colors duration-300">
+            <i data-lucide="cpu" class="w-8 h-8"></i>
+            <span class="text-lg font-montserrat font-semibold">Groq</span>
+          </div>
+          <div class="flex items-center gap-3 text-gray-400 hover:text-orange-600 transition-colors duration-300">
+            <i data-lucide="audio-waveform" class="w-8 h-8"></i>
+            <span class="text-lg font-montserrat font-semibold">Whisper</span>
+          </div>
+          <div class="flex items-center gap-3 text-gray-400 hover:text-gray-900 transition-colors duration-300">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-8 h-8"><path d="M12 2a8.4 8.4 0 0 0-2.2.3 7.5 7.5 0 0 0-4.6 3.5A8.3 8.3 0 0 0 4 9.5c0 1.4.3 2.6.8 3.7.5 1 1.2 1.8 2 2.6l.6.5c.3.3.5.7.6 1.1V20a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.6c.1-.4.3-.8.6-1.1l.6-.5c.8-.8 1.5-1.6 2-2.6.5-1.1.8-2.3.8-3.7a8.3 8.3 0 0 0-1.2-3.7 7.5 7.5 0 0 0-4.6-3.5A8.4 8.4 0 0 0 12 2z"/></svg>
+            <span class="text-lg font-montserrat font-semibold">Apple Silicon</span>
+          </div>
+          <div class="flex items-center gap-3 text-gray-400 hover:text-blue-600 transition-colors duration-300">
+            <i data-lucide="layers" class="w-8 h-8"></i>
+            <span class="text-lg font-montserrat font-semibold">Tauri</span>
+          </div>
+          <div class="flex items-center gap-3 text-gray-400 hover:text-orange-600 transition-colors duration-300">
+            <i data-lucide="cog" class="w-8 h-8"></i>
+            <span class="text-lg font-montserrat font-semibold">Rust</span>
+          </div>
+          <div class="flex items-center gap-3 text-gray-400 hover:text-purple-600 transition-colors duration-300">
+            <i data-lucide="brain" class="w-8 h-8"></i>
+            <span class="text-lg font-montserrat font-semibold">Llama 3.3</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 9. PRICING ==================== -->
+    <div id="pricing" class="py-24">
+      <h2 class="text-4xl md:text-5xl text-center mb-4 tracking-tight text-gray-900 font-montserrat font-semibold">Simple Pricing</h2>
+      <p class="text-lg text-gray-500 font-montserrat font-medium text-center mb-16">One price. Everything included. No subscriptions — yet.</p>
+
+      <div class="max-w-lg mx-auto">
+        <div class="bg-white rounded-[2.5rem] border border-gray-200 shadow-xl shadow-gray-200/40 p-10 md:p-12 text-center">
+          <!-- Badge -->
+          <span class="inline-flex items-center gap-2 bg-rose-50 text-rose-600 px-4 py-1.5 rounded-full text-xs font-montserrat font-bold uppercase tracking-wider border border-rose-100 mb-8">LAUNCH SPECIAL</span>
+
+          <!-- Price -->
+          <div class="mb-4">
+            <span class="text-6xl md:text-7xl font-montserrat font-bold text-gray-900">$29</span>
+            <span class="text-lg text-gray-500 font-montserrat font-medium ml-2">one-time</span>
+          </div>
+          <p class="text-sm text-gray-500 font-montserrat font-medium mb-10">Lock in lifetime v1.x access before we switch to $9.99/mo</p>
+
+          <!-- Checklist -->
+          <div class="text-left space-y-4 mb-10">
+            <div class="flex items-center gap-3">
+              <div class="w-5 h-5 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
+                <i data-lucide="check" class="w-3 h-3 text-green-600"></i>
+              </div>
+              <span class="text-base text-gray-700 font-montserrat font-medium">Cloud transcription via Groq (free API key required)</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="w-5 h-5 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
+                <i data-lucide="check" class="w-3 h-3 text-green-600"></i>
+              </div>
+              <span class="text-base text-gray-700 font-montserrat font-medium">AI Rewrite — 4 styles</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="w-5 h-5 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
+                <i data-lucide="check" class="w-3 h-3 text-green-600"></i>
+              </div>
+              <span class="text-base text-gray-700 font-montserrat font-medium">9 languages + auto-detect</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="w-5 h-5 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
+                <i data-lucide="check" class="w-3 h-3 text-green-600"></i>
+              </div>
+              <span class="text-base text-gray-700 font-montserrat font-medium">Local Whisper mode</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="w-5 h-5 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
+                <i data-lucide="check" class="w-3 h-3 text-green-600"></i>
+              </div>
+              <span class="text-base text-gray-700 font-montserrat font-medium">Custom dictionary</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="w-5 h-5 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
+                <i data-lucide="check" class="w-3 h-3 text-green-600"></i>
+              </div>
+              <span class="text-base text-gray-700 font-montserrat font-medium">Searchable history with export</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="w-5 h-5 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
+                <i data-lucide="check" class="w-3 h-3 text-green-600"></i>
+              </div>
+              <span class="text-base text-gray-700 font-montserrat font-medium">All v1.x updates</span>
+            </div>
+          </div>
+
+          <!-- CTA -->
+          <a href="https://LEMONSQUEEZY_CHECKOUT_URL" class="w-full bg-gradient-to-r from-rose-500 to-orange-500 text-white h-14 rounded-xl flex items-center justify-center gap-2.5 font-montserrat font-bold text-lg hover:shadow-lg hover:shadow-rose-500/30 transition-all active:scale-[0.98]">
+            Buy Now
+          </a>
+        </div>
+
+        <p class="text-center text-sm text-gray-400 font-montserrat font-medium mt-6">Pro subscription ($9.99/mo) coming soon with priority support and all future updates.</p>
+      </div>
+    </div>
+
+    <!-- ==================== 10. FINAL CTA ==================== -->
+    <div class="bg-white rounded-[3rem] p-10 md:p-16 lg:p-20 shadow-sm border border-gray-100 text-center">
+      <img src="assets/images/shhh_logo_thick.png" alt="ShhhType" class="w-20 h-20 mx-auto mb-8">
+      <h2 class="text-4xl md:text-5xl lg:text-6xl tracking-tight text-gray-900 font-medium mb-6">
+        Stop typing.
+        <span class="italic text-gray-400">Start talking.</span>
+      </h2>
+      <p class="text-lg md:text-xl text-gray-500 font-montserrat font-medium max-w-2xl mx-auto mb-10 leading-relaxed">
+        ShhhType lives in your menu bar, ready whenever you are. One hotkey. Any app. Instant text.
+      </p>
+      <a href="https://LEMONSQUEEZY_CHECKOUT_URL" class="inline-flex items-center gap-3 bg-gradient-to-r from-rose-500 to-orange-500 text-white pl-8 pr-6 py-4 rounded-full text-lg hover:shadow-lg hover:shadow-rose-500/30 transition-all duration-300 font-montserrat font-semibold group/btn">
+        Buy Now — $29
+        <div class="bg-white/20 rounded-full p-1.5 group-hover/btn:bg-white/30 transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 group-hover/btn:translate-x-0.5 transition-transform"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+        </div>
+      </a>
+      <p class="text-sm text-gray-400 font-montserrat font-medium mt-6">macOS &middot; Apple Silicon recommended</p>
+    </div>
+  </main>
+
+  <!-- ==================== 11. FOOTER ==================== -->
+  <footer class="bg-gray-100 mt-auto">
+    <div class="max-w-7xl mx-auto px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-2">
+        <img src="assets/images/shhh_logo_thick.png" alt="ShhhType" class="w-5 h-5">
+        <p class="text-sm text-gray-500 font-montserrat font-medium">&copy; 2026 ShhhType. All rights reserved.</p>
+      </div>
+      <a href="mailto:support@shhhtype.com" class="text-sm text-gray-500 font-montserrat font-medium hover:text-rose-600 transition-colors">support@shhhtype.com</a>
+    </div>
+  </footer>
+
+  <!-- Initialize Lucide Icons -->
+  <script>lucide.createIcons();</script>
+</body>
+</html>
