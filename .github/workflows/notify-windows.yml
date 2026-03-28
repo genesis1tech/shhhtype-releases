@@ -1,4 +1,4 @@
-name: Notify Windows Repo
+name: Create Windows Sync Issue
 
 on:
   pull_request:
@@ -6,21 +6,54 @@ on:
     branches: [main]
 
 jobs:
-  notify:
+  create-issue:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
-      - name: Dispatch to shhhtype-win
-        uses: peter-evans/repository-dispatch@v3
+      - name: Checkout vox2txt for diff
+        uses: actions/checkout@v4
         with:
-          token: ${{ secrets.CROSS_REPO_PAT }}
-          repository: genesis1tech/shhhtype-win
-          event-type: macos-sync
-          client-payload: |
-            {
-              "pr_number": ${{ github.event.pull_request.number }},
-              "pr_title": "${{ github.event.pull_request.title }}",
-              "pr_url": "${{ github.event.pull_request.html_url }}",
-              "merge_sha": "${{ github.event.pull_request.merge_commit_sha }}",
-              "base_sha": "${{ github.event.pull_request.base.sha }}"
-            }
+          fetch-depth: 0
+
+      - name: Generate diff summary
+        id: diff
+        run: |
+          FILES=$(git diff --stat ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.merge_commit_sha }} -- \
+            'src-tauri/src/' 'src/components/' 'src/hooks/' 'src/lib/' 'src/styles/' \
+            2>/dev/null | tail -1 || echo "unknown")
+          echo "files_changed=$FILES" >> "$GITHUB_OUTPUT"
+
+      - name: Create issue in shhhtype-win
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.CROSS_REPO_PAT }}
+          script: |
+            const prTitle = context.payload.pull_request.title;
+            const prUrl = context.payload.pull_request.html_url;
+            const prNumber = context.payload.pull_request.number;
+            const prBody = context.payload.pull_request.body || '';
+            const filesChanged = '${{ steps.diff.outputs.files_changed }}';
+
+            const body = `## macOS Change Detected
+
+            A PR was merged to [vox2txt](https://github.com/genesis1tech/vox2txt) that may need to be ported to the Windows version.
+
+            **Source PR:** [${prTitle}](${prUrl}) (#${prNumber})
+            **Files changed:** ${filesChanged}
+
+            ### PR Description
+            ${prBody.substring(0, 1000)}${prBody.length > 1000 ? '...' : ''}
+
+            ---
+            **Action needed:** Review the macOS changes and port applicable updates to shhhtype-win.
+            Skip macOS-specific changes (Cocoa, keychain, NSPanel, CGEvent) and adapt for Windows (Ctrl instead of Cmd, SendInput instead of CGEvent, etc.).
+
+            _Auto-created by [notify-windows.yml](https://github.com/genesis1tech/vox2txt/blob/main/.github/workflows/notify-windows.yml)_`;
+
+            await github.rest.issues.create({
+              owner: 'genesis1tech',
+              repo: 'shhhtype-win',
+              title: `sync: ${prTitle}`,
+              body: body,
+              labels: ['sync-macos']
+            });
