@@ -42,6 +42,7 @@ export interface Settings {
   audio_input_device: string | null;
   overlay_position: OverlayPosition;
   skill_formatting: boolean;
+  audio_boost: boolean;
 }
 
 /** Audio input device info */

@@ -128,7 +128,9 @@ pub fn do_start_recording(state: &Arc<AppState>, app: Option<AppHandle>) -> Resu
                                     .map(|s| s * s)
                                     .sum::<f32>()
                                     / (end - start) as f32;
-                                (rms.sqrt() * 15.0).min(1.0)
+                                // sqrt twice (fourth root) gives much better visual
+                                // response for quiet/distant microphones
+                                (rms.sqrt().sqrt() * 3.5).min(1.0)
                             })
                             .collect())
                     } else {
@@ -232,6 +234,13 @@ pub fn do_stop_and_transcribe(state: &Arc<AppState>) -> Result<String, String> {
     log::info!("Peak audio RMS: {:.6} (silence floor: {:.6})", peak_rms, silence_floor);
 
     let config = state.config.read().clone();
+
+    // Audio boost: normalize levels for better transcription with quiet/distant microphones
+    let mut samples = raw_samples;
+    if config.audio_boost {
+        crate::audio::normalize::normalize_audio(&mut samples);
+    }
+
     let transcribed_text = match config.transcription_backend {
         TranscriptionBackend::Cloud => {
             // Cloud transcription is a premium feature — require a valid license
@@ -247,13 +256,13 @@ pub fn do_stop_and_transcribe(state: &Arc<AppState>) -> Result<String, String> {
                 return Err("Groq API key not set. Configure it in Settings > General.".into());
             }
             log::info!("Transcribing via Groq cloud (skipping resample, sending {}Hz)...", sample_rate);
-            crate::transcribe::groq::transcribe(&raw_samples, sample_rate, &config.language, api_key, Some(&state.groq_usage))
+            crate::transcribe::groq::transcribe(&samples, sample_rate, &config.language, api_key, Some(&state.groq_usage))
                 .map_err(|e| format!("Cloud transcription failed: {}", e))?
         }
         TranscriptionBackend::Local => {
             // Local Whisper requires 16kHz — resample if needed
             let resample_start = Instant::now();
-            let samples_16k = resample_to_16khz(&raw_samples, sample_rate)
+            let samples_16k = resample_to_16khz(&samples, sample_rate)
                 .map_err(|e| format!("Resampling failed: {}", e))?;
             log::info!("Resampled to {} samples at 16kHz in {:?}", samples_16k.len(), resample_start.elapsed());
 

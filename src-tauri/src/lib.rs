@@ -200,12 +200,12 @@ pub fn run() {
                 let _ = std::fs::write(&onboarding_flag, "1");
             }
 
-            // Background timer: auto-clear composition buffer after TTL (10 min)
+            // Background timer: auto-clear composition buffer after TTL (90s)
             {
                 let app_for_ttl = app.handle().clone();
                 std::thread::spawn(move || {
                     loop {
-                        std::thread::sleep(std::time::Duration::from_secs(60));
+                        std::thread::sleep(std::time::Duration::from_secs(30));
                         let state = app_for_ttl.state::<Arc<AppState>>();
                         let expired = state.composition.lock().is_expired();
                         if expired {

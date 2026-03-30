@@ -2,6 +2,16 @@
 
 ## Recent Changes
 
+### minor: audio boost, overlay improvements, and composition TTL reduction - 2026-03-29
+- Branch: `minor/70-audio-boost-and-overlay-improvements`
+- PR: pending
+- Summary: Audio boost (peak normalization + soft compression) for better transcription with quiet/distant mics, default on. Overlay window level raised to 1001 (above all apps including terminals). Waveform visualization uses fourth-root scaling for better low-level response. Hid inline overlay position setting (#70). VAD slider range narrowed to 0.001–0.02. Composition buffer TTL reduced from 10min to 90s.
+
+### minor: add Kennedy and Hormozi transcript rewriter pipeline skills - 2026-03-28
+- Branch: `minor/transcript-rewriter-skills`
+- PR: https://github.com/genesis1tech/vox2txt/pull/69
+- Summary: Rebuilt Hormozi skill into full transcript parsing pipeline (CLEAN → SEGMENT → CLASSIFY → REWRITE) with 15 content categories, detection guide, and rewrite rules. Added /alex alias. Added Kennedy transcript rewriter as new built-in skill with same pipeline architecture. Triggers: /kennedy, /dan, /sales letter. Both under Creator Styles in Settings.
+
 ### minor: align website messaging with GTM playbook - 2026-03-28
 - Branch: `minor/5-shhhtype-landing-page`
 - PR: https://github.com/genesis1tech/vox2txt/pull/66
@@ -22,7 +32,3 @@
 - PR: https://github.com/genesis1tech/vox2txt/pull/49
 - Summary: 7-day trial with full feature access, trial start in macOS Keychain (anti-tamper), LemonSqueezy online validation every 24h, license.json requires Keychain key, all features blocked on expiry, License tab redesign with countdown UI, dynamic app version in About tab.
 
-### docs: add Terms and Conditions and Privacy Policy - 2026-03-25
-- Branch: `docs/add-terms-and-privacy`
-- PR: https://github.com/genesis1tech/vox2txt/pull/48
-- Summary: Terms (17 sections) and Privacy Policy (11 sections) for Genesis 1 Technologies, LLC. Legal links in About tab open shhhtype.com/terms and shhhtype.com/privacy. Copyright notice added.

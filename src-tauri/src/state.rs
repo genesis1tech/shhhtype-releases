@@ -41,8 +41,8 @@ pub fn update_groq_usage(
     u.updated_at = Some(chrono::Utc::now().to_rfc3339());
 }
 
-/// Composition buffer TTL in seconds (30 minutes).
-const BUFFER_TTL_SECS: u64 = 600;
+/// Composition buffer TTL in seconds (90 seconds).
+const BUFFER_TTL_SECS: u64 = 90;
 /// Maximum entries in the composition buffer.
 const BUFFER_MAX_ENTRIES: usize = 20;
 

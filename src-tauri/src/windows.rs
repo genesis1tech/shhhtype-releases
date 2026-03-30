@@ -1,11 +1,12 @@
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
-/// macOS window level for the overlay panel — NSPopUpMenuWindowLevel (101).
-/// This ensures the overlay renders above all normal windows, floating panels,
-/// and modal dialogs. Combined with NSPanel swizzle, it also appears over
-/// full-screen Spaces.
+/// macOS window level for the overlay panel — above NSScreenSaverWindowLevel (1000).
+/// Level 1001 ensures the overlay renders above ALL other windows including
+/// full-screen terminal apps (iTerm2, Kitty, Terminal.app), floating panels,
+/// modal dialogs, and screensaver-level windows. Combined with NSPanel swizzle,
+/// it also appears over full-screen Spaces.
 #[cfg(target_os = "macos")]
-pub const OVERLAY_WINDOW_LEVEL: i64 = 101;
+pub const OVERLAY_WINDOW_LEVEL: i64 = 1001;
 
 /// Swizzle a Tauri-created NSWindow into an NSPanel at runtime.
 ///
@@ -103,24 +104,162 @@ pub unsafe fn apply_transparent_titlebar(ns_window: cocoa::base::id) {
     let _: () = msg_send![ns_window, setTitleVisibility: 1_i64];
 }
 
-/// Compute the overlay origin positioned near the mouse cursor.
+/// Try to get the text cursor (caret) position via the macOS Accessibility API.
 ///
-/// Centers the overlay horizontally on the cursor and places it above the cursor
-/// with a 20px gap. Falls back to below cursor if near the top of the screen.
-/// Clamps to the visible frame of the screen containing the cursor.
+/// Returns (x, y) in Cocoa screen coordinates (Y=0 at bottom) if successful.
+/// Requires Accessibility permission (already granted for text injection).
 #[cfg(target_os = "macos")]
-unsafe fn cursor_overlay_origin(width: f64, height: f64) -> (f64, f64) {
+unsafe fn text_cursor_position() -> Option<(f64, f64)> {
+    use core_foundation::base::{CFRelease, CFTypeRef, TCFType};
+    use core_foundation::string::CFString;
+    use cocoa::appkit::NSScreen;
+    use cocoa::foundation::NSArray;
+    use objc::{msg_send, sel, sel_impl};
+
+    #[link(name = "ApplicationServices", kind = "framework")]
+    extern "C" {
+        fn AXUIElementCreateSystemWide() -> CFTypeRef;
+        fn AXUIElementCopyAttributeValue(
+            element: CFTypeRef,
+            attribute: CFTypeRef,
+            value: *mut CFTypeRef,
+        ) -> i32;
+        fn AXUIElementCopyParameterizedAttributeValue(
+            element: CFTypeRef,
+            attr: CFTypeRef,
+            param: CFTypeRef,
+            value: *mut CFTypeRef,
+        ) -> i32;
+        fn AXValueGetValue(value: CFTypeRef, value_type: u32, value_ptr: *mut std::ffi::c_void) -> bool;
+    }
+
+    // kAXValueTypeCGRect = 4
+    const K_AX_VALUE_CG_RECT: u32 = 4;
+
+    let system = AXUIElementCreateSystemWide();
+    if system.is_null() {
+        return None;
+    }
+
+    // Get the focused application
+    let attr_focused_app = CFString::new("AXFocusedApplication");
+    let mut focused_app: CFTypeRef = std::ptr::null();
+    let err = AXUIElementCopyAttributeValue(system, attr_focused_app.as_CFTypeRef(), &mut focused_app);
+    CFRelease(system);
+    if err != 0 || focused_app.is_null() {
+        log::debug!("text_cursor_position: no focused app (err={})", err);
+        return None;
+    }
+
+    // Get the focused UI element within that app
+    let attr_focused_elem = CFString::new("AXFocusedUIElement");
+    let mut focused_elem: CFTypeRef = std::ptr::null();
+    let err = AXUIElementCopyAttributeValue(focused_app, attr_focused_elem.as_CFTypeRef(), &mut focused_elem);
+    CFRelease(focused_app);
+    if err != 0 || focused_elem.is_null() {
+        log::debug!("text_cursor_position: no focused element (err={})", err);
+        return None;
+    }
+
+    // Get the selected text range (tells us where the caret is)
+    let attr_selected_range = CFString::new("AXSelectedTextRange");
+    let mut range_value: CFTypeRef = std::ptr::null();
+    let err = AXUIElementCopyAttributeValue(focused_elem, attr_selected_range.as_CFTypeRef(), &mut range_value);
+    if err != 0 || range_value.is_null() {
+        log::debug!("text_cursor_position: no selected text range (err={})", err);
+        CFRelease(focused_elem);
+        return None;
+    }
+
+    // Get the screen bounds for that text range (caret position)
+    let attr_bounds = CFString::new("AXBoundsForRange");
+    let mut bounds_value: CFTypeRef = std::ptr::null();
+    let err = AXUIElementCopyParameterizedAttributeValue(
+        focused_elem,
+        attr_bounds.as_CFTypeRef(),
+        range_value,
+        &mut bounds_value,
+    );
+    CFRelease(range_value);
+    CFRelease(focused_elem);
+    if err != 0 || bounds_value.is_null() {
+        log::debug!("text_cursor_position: AXBoundsForRange failed (err={})", err);
+        return None;
+    }
+
+    // AXBoundsForRange returns a CGRect AXValue (type 4)
+    // CGRect in CG coords: Y=0 at top-left of primary screen
+    #[repr(C)]
+    #[derive(Debug, Default, Copy, Clone)]
+    struct CGRect {
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+    }
+
+    let mut rect = CGRect::default();
+    let got_rect = AXValueGetValue(
+        bounds_value,
+        K_AX_VALUE_CG_RECT,
+        &mut rect as *mut _ as *mut std::ffi::c_void,
+    );
+    CFRelease(bounds_value);
+
+    if !got_rect {
+        log::debug!("text_cursor_position: failed to extract CGRect from AXValue");
+        return None;
+    }
+
+    // Convert from CG coords (Y=0 at top) to Cocoa coords (Y=0 at bottom)
+    let screens: cocoa::base::id = NSScreen::screens(cocoa::base::nil);
+    if screens.count() == 0 {
+        return None;
+    }
+    let primary: cocoa::base::id = msg_send![screens, objectAtIndex: 0u64];
+    let primary_frame: cocoa::foundation::NSRect = msg_send![primary, frame];
+    let primary_height = primary_frame.size.height;
+
+    // CG origin is top-left of the caret rect; convert to Cocoa bottom-left
+    let cocoa_x = rect.x;
+    let cocoa_y = primary_height - rect.y - rect.height;
+
+    log::info!(
+        "Text cursor at CG({:.0},{:.0}) size({:.0},{:.0}) → Cocoa({:.0},{:.0})",
+        rect.x, rect.y, rect.width, rect.height, cocoa_x, cocoa_y
+    );
+
+    Some((cocoa_x, cocoa_y))
+}
+
+/// Compute the overlay origin positioned near the text cursor (caret).
+///
+/// `text_cursor` is the pre-captured caret position (Cocoa coords) from
+/// before GCD dispatch. Falls back to mouse pointer if None.
+///
+/// Centers the overlay horizontally on the anchor and places it above with
+/// a 20px gap. Falls back to below if near the top of the screen.
+/// Clamps to the visible frame of the screen containing the anchor.
+#[cfg(target_os = "macos")]
+unsafe fn cursor_overlay_origin(width: f64, height: f64, text_cursor: Option<(f64, f64)>) -> (f64, f64) {
     use cocoa::appkit::{NSEvent, NSScreen};
     use cocoa::foundation::{NSArray, NSPoint, NSRect};
     use objc::{msg_send, sel, sel_impl};
 
-    // mouseLocation returns Cocoa coords (Y=0 at bottom of primary screen)
-    let cursor: NSPoint = NSEvent::mouseLocation(cocoa::base::nil);
+    // Use pre-captured text cursor, fall back to mouse pointer
+    let anchor: NSPoint = if let Some((cx, cy)) = text_cursor {
+        log::info!("Overlay positioned at text cursor ({:.0}, {:.0})", cx, cy);
+        NSPoint::new(cx, cy)
+    } else {
+        log::debug!("Text cursor not available, falling back to mouse position");
+        NSEvent::mouseLocation(cocoa::base::nil)
+    };
+
     let screens: cocoa::base::id = NSScreen::screens(cocoa::base::nil);
     let count = screens.count();
     let gap = 20.0;
 
-    // Find the screen containing the cursor
+    // Find the screen containing the anchor
     let mut visible: NSRect = cocoa::foundation::NSRect::new(
         cocoa::foundation::NSPoint::new(0.0, 0.0),
         cocoa::foundation::NSSize::new(1920.0, 1080.0),
@@ -128,24 +267,24 @@ unsafe fn cursor_overlay_origin(width: f64, height: f64) -> (f64, f64) {
     for i in 0..count {
         let screen: cocoa::base::id = msg_send![screens, objectAtIndex: i];
         let frame: NSRect = msg_send![screen, frame];
-        if cursor.x >= frame.origin.x
-            && cursor.x < frame.origin.x + frame.size.width
-            && cursor.y >= frame.origin.y
-            && cursor.y < frame.origin.y + frame.size.height
+        if anchor.x >= frame.origin.x
+            && anchor.x < frame.origin.x + frame.size.width
+            && anchor.y >= frame.origin.y
+            && anchor.y < frame.origin.y + frame.size.height
         {
             visible = msg_send![screen, visibleFrame];
             break;
         }
     }
 
-    // Center horizontally on cursor
-    let mut x = cursor.x - width / 2.0;
-    // Place above cursor (Cocoa Y grows upward)
-    let mut y = cursor.y + gap;
+    // Center horizontally on anchor
+    let mut x = anchor.x - width / 2.0;
+    // Place above anchor (Cocoa Y grows upward)
+    let mut y = anchor.y + gap;
 
-    // If too close to top, place below cursor instead
+    // If too close to top, place below anchor instead
     if y + height > visible.origin.y + visible.size.height {
-        y = cursor.y - height - gap;
+        y = anchor.y - height - gap;
     }
 
     // Clamp to visible frame
@@ -170,6 +309,10 @@ unsafe fn cursor_overlay_origin(width: f64, height: f64) -> (f64, f64) {
 struct OverlayShowCtx {
     ns_ptr: usize,
     inline_pos: bool,
+    /// Pre-captured text cursor position (Cocoa coords) from calling thread.
+    /// Must be captured before GCD dispatch because the focused app changes
+    /// once the overlay appears.
+    text_cursor: Option<(f64, f64)>,
 }
 
 /// Show the overlay window and ensure it stays above all other windows.
@@ -187,9 +330,19 @@ pub fn show_overlay(app: &AppHandle, inline: bool) {
         #[cfg(target_os = "macos")]
         {
             if let Ok(ns_ptr) = w.ns_window() {
+                // Capture text cursor BEFORE dispatching to main thread.
+                // Once GCD dispatch runs, our overlay becomes visible and
+                // the focused app/element changes — accessibility queries
+                // would return our own app instead of the user's text field.
+                let text_cursor = if inline {
+                    unsafe { text_cursor_position() }
+                } else {
+                    None
+                };
                 let ctx = Box::new(OverlayShowCtx {
                     ns_ptr: ns_ptr as usize,
                     inline_pos: inline,
+                    text_cursor,
                 });
                 let ctx_ptr = Box::into_raw(ctx) as *mut std::ffi::c_void;
                 // Dispatch window ordering to main thread (AppKit requirement).
@@ -211,6 +364,7 @@ pub fn show_overlay(app: &AppHandle, inline: bool) {
                             let (x, y) = cursor_overlay_origin(
                                 frame.size.width,
                                 frame.size.height,
+                                overlay_ctx.text_cursor,
                             );
                             let origin = NSPoint::new(x, y);
                             let _: () = msg_send![ns_window, setFrameOrigin: origin];

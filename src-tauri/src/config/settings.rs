@@ -54,6 +54,9 @@ pub struct Settings {
     /// Whether skill rewrites apply Unicode text formatting (bold/italic).
     #[serde(default = "default_true")]
     pub skill_formatting: bool,
+    /// Normalize audio levels before transcription to improve accuracy with quiet/distant microphones.
+    #[serde(default = "default_true")]
+    pub audio_boost: bool,
 }
 
 fn default_true() -> bool {
@@ -125,6 +128,7 @@ impl Default for Settings {
             audio_input_device: None,
             overlay_position: OverlayPosition::TopCenter,
             skill_formatting: true,
+            audio_boost: true,
         }
     }
 }

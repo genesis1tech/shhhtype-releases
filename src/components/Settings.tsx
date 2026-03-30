@@ -34,7 +34,6 @@ import type {
   TrialInfo,
   GroqUsage,
   UpdateInfo,
-  OverlayPosition,
   SkillInfo,
 } from "../lib/types";
 import History from "./History";
@@ -711,25 +710,8 @@ function GeneralTab({
             }
           />
         </SettingsRow>
-        <SettingsRow
-          label="Overlay position"
-          description="Where to show the recording overlay"
-        >
-          <select
-            className="apple-select"
-            value={settings.overlay_position ?? "TopCenter"}
-            disabled={!settings.show_overlay}
-            onChange={(e) =>
-              save({
-                ...settings,
-                overlay_position: e.target.value as OverlayPosition,
-              })
-            }
-          >
-            <option value="TopCenter">Top center</option>
-            <option value="Inline">At cursor</option>
-          </select>
-        </SettingsRow>
+        {/* Overlay position selector hidden — inline/cursor mode needs more work.
+            Keep OverlayPosition type and backend code intact for future use. */}
         <SettingsRow
           label="Sound feedback"
           description="Play sound on start/stop"
@@ -803,7 +785,7 @@ function AudioTab({
           <input
             type="range"
             min="0.001"
-            max="0.1"
+            max="0.02"
             step="0.001"
             value={settings.vad_threshold}
             onChange={(e) =>
@@ -832,6 +814,19 @@ function AudioTab({
               })
             }
             className="w-32 accent-[#007AFF]"
+          />
+        </SettingsRow>
+        <SettingsRow
+          label="Audio Boost"
+          description="Normalize audio levels for better transcription with quiet microphones"
+        >
+          <input
+            type="checkbox"
+            className="apple-toggle"
+            checked={settings.audio_boost}
+            onChange={(e) =>
+              save({ ...settings, audio_boost: e.target.checked })
+            }
           />
         </SettingsRow>
       </SettingsGroup>
