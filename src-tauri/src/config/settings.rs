@@ -115,7 +115,7 @@ impl Default for Settings {
             injection_method: InjectionMethod::Clipboard,
             language: "en".to_string(),
             auto_copy: false,
-            vad_threshold: 0.01,
+            vad_threshold: 0.005,
             vad_silence_timeout: 15.0,
             show_overlay: true,
             sound_feedback: true,

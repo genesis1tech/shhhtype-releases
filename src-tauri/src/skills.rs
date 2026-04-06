@@ -433,6 +433,8 @@ Classify each segment before rewriting. Never skip classification.
 
 ## THE EXECUTION WORKFLOW
 
+**IMPORTANT: Steps 1-5 are your INTERNAL reasoning process. Do NOT output any of these steps. No headers, no labels, no intermediate results. The user should ONLY see the final assembled copy from Step 6.**
+
 ### STEP 1: RECEIVE AND READ THE FULL TRANSCRIPT
 Read the entire transcript first. Do not segment or rewrite yet.
 Form a mental model of:
@@ -486,42 +488,9 @@ Hormozi Rewriting Principles (apply to ALL categories):
 
 ### STEP 6: OUTPUT THE RESULTS
 
-For every segment, output in this exact format:
+Output ONLY the final assembled copy — all segments woven together into one continuous, flow-edited piece.
 
-```
-----------------------------------------------------
-SEGMENT [#] | CATEGORY: [CATEGORY NAME]
-----------------------------------------------------
-
-ORIGINAL:
-"[original transcript text for this segment]"
-
-HORMOZI REWRITE:
-[Rewritten content in Hormozi style]
-
-COPY NOTE: [One-sentence explanation of what Hormozi technique was applied]
-----------------------------------------------------
-```
-
-After all segments, output:
-
-```
-====================================================
-FULL ASSEMBLED CONTENT
-(All segments combined, flow-edited for continuity)
-====================================================
-
-[Complete rewritten piece, all segments woven together]
-
-====================================================
-CONTENT MAP SUMMARY
-====================================================
-Segments Processed: [#]
-Categories Found:   [list each category detected]
-Frameworks Used:    [Value Equation, Contrast, Timeline, etc.]
-Missing Elements:   [any critical Hormozi elements absent from transcript]
-Recommended Adds:   [specific suggestions for what to add to strengthen the piece]
-```
+Do NOT output individual segments, originals, copy notes, segment numbers, category labels, copy map summaries, or any other metadata. Just the finished rewritten text, ready to use.
 
 ---
 
@@ -828,6 +797,8 @@ Classify each segment before rewriting. Never skip classification.
 
 ## THE EXECUTION WORKFLOW
 
+**IMPORTANT: Steps 1-5 are your INTERNAL reasoning process. Do NOT output any of these steps. No headers, no labels, no intermediate results. The user should ONLY see the final assembled copy from Step 6.**
+
 ### STEP 1: RECEIVE AND READ THE FULL TRANSCRIPT
 Read the entire transcript first. Do not segment or rewrite yet.
 Form a mental model of:
@@ -877,41 +848,9 @@ Kennedy Rewriting Principles (apply to ALL categories):
 
 ### STEP 6: OUTPUT THE RESULTS
 
-For every segment, output in this exact format:
+Output ONLY the final assembled copy — all segments woven together into one continuous, flow-edited piece.
 
-```
-----------------------------------------------------
-SEGMENT [#] | CATEGORY: [CATEGORY NAME]
-----------------------------------------------------
-
-ORIGINAL:
-"[original transcript text for this segment]"
-
-KENNEDY REWRITE:
-[Rewritten copy in Kennedy style]
-
-COPY NOTE: [One-sentence explanation of what Kennedy technique was applied]
-----------------------------------------------------
-```
-
-After all segments, output:
-
-```
-====================================================
-FULL ASSEMBLED COPY
-(All segments combined, flow-edited for continuity)
-====================================================
-
-[Complete rewritten piece, all segments woven together]
-
-====================================================
-COPY MAP SUMMARY
-====================================================
-Segments Processed: [#]
-Categories Found:   [list each category detected]
-Missing Elements:   [any critical Kennedy elements absent from transcript]
-Recommended Adds:   [specific suggestions for what to add to complete the piece]
-```
+Do NOT output individual segments, originals, copy notes, segment numbers, category labels, copy map summaries, or any other metadata. Just the finished rewritten text, ready to use.
 
 ---
 
@@ -974,8 +913,8 @@ Dan Kennedy's direct-response style is characterized by:
 
 ## Output Format
 
-Return the full pipeline output: per-segment breakdown + assembled copy + summary map.
-No meta-commentary before the output. Jump straight into SEGMENT 1."####;
+Return ONLY the final assembled copy. No segments, no metadata, no commentary.
+Jump straight into the rewritten text."####;
 
 #[cfg(test)]
 mod tests {

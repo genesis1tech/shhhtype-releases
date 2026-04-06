@@ -41,14 +41,14 @@ pub fn inject_via_clipboard(text: &str) -> Result<()> {
         ));
     }
 
-    // 4. Delay to ensure clipboard is ready and target app has focus
-    std::thread::sleep(std::time::Duration::from_millis(100));
+    // 4. Brief delay to ensure clipboard is ready and target app has focus
+    std::thread::sleep(std::time::Duration::from_millis(30));
 
     // 5. Simulate Cmd+V keystroke
     simulate_cmd_v()?;
 
     // 6. Wait for the target app to process the paste before restoring
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    std::thread::sleep(std::time::Duration::from_millis(150));
     let _ = clipboard.set_text(previous);
 
     log::info!("Injected {} chars via clipboard", text.len());

@@ -248,15 +248,25 @@ pub fn do_stop_and_transcribe(state: &Arc<AppState>) -> Result<String, String> {
                 state.set_state(STATE_IDLE);
                 return Err(e);
             }
-            // Cloud: send raw audio at native sample rate — Groq downsamples server-side.
-            // This skips the expensive client-side resampling step entirely.
             let api_key = config.groq_api_key.as_deref().unwrap_or("");
             if api_key.is_empty() {
                 state.set_state(STATE_IDLE);
                 return Err("Groq API key not set. Configure it in Settings > General.".into());
             }
-            log::info!("Transcribing via Groq cloud (skipping resample, sending {}Hz)...", sample_rate);
-            crate::transcribe::groq::transcribe(&samples, sample_rate, &config.language, api_key, Some(&state.groq_usage))
+            // Downsample to 16kHz before uploading — cuts WAV size by ~3x (48kHz→16kHz)
+            // which significantly reduces upload time. Groq accepts any sample rate.
+            let (upload_samples, upload_rate) = if sample_rate > 16000 {
+                let resample_start = Instant::now();
+                let resampled = resample_to_16khz(&samples, sample_rate)
+                    .map_err(|e| format!("Resampling failed: {}", e))?;
+                log::info!("Cloud resample {}Hz→16kHz ({} → {} samples) in {:?}",
+                    sample_rate, samples.len(), resampled.len(), resample_start.elapsed());
+                (resampled, 16000u32)
+            } else {
+                (samples, sample_rate)
+            };
+            log::info!("Transcribing via Groq cloud (sending {}Hz)...", upload_rate);
+            crate::transcribe::groq::transcribe(&upload_samples, upload_rate, &config.language, api_key, Some(&state.groq_usage))
                 .map_err(|e| format!("Cloud transcription failed: {}", e))?
         }
         TranscriptionBackend::Local => {
@@ -817,9 +827,10 @@ pub fn activate_license(
     key: String,
 ) -> Result<LicenseStatus, String> {
     license::activate_license(&key, &state.data_dir)
-        .map(|_| {
-            crate::analytics::track("license_activated", serde_json::json!({}));
-            LicenseStatus::Licensed
+        .map(|info| {
+            let status = license::status_for_product(info.product_id);
+            crate::analytics::track("license_activated", serde_json::json!({ "status": format!("{:?}", status) }));
+            status
         })
         .map_err(|e| e.to_string())
 }

@@ -307,21 +307,8 @@ pub fn register_hotkey(app: &tauri::AppHandle, shortcut_str: &str) {
                                 sound::play_stop_sound();
                             }
 
-                            // Save to history DB with actual duration
-                            save_to_history(&state, &text, duration_ms);
-
-                            // Track transcription analytics
-                            analytics::track("transcription_completed", serde_json::json!({
-                                "backend": format!("{:?}", config.transcription_backend),
-                                "duration_ms": duration_ms,
-                                "word_count": text.split_whitespace().count(),
-                                "char_count": text.chars().count(),
-                            }));
-
-                            // Send macOS notification
-                            send_notification(&app, &text);
-
-                            // Inject text into focused app
+                            // Inject text FIRST — minimize latency between transcription and text appearing
+                            // History, analytics, and notification are deferred to after injection.
                             let injection_ok = match config.injection_method {
                                 InjectionMethod::Clipboard => {
                                     inject::clipboard::inject_via_clipboard(&text)
@@ -360,6 +347,22 @@ pub fn register_hotkey(app: &tauri::AppHandle, shortcut_str: &str) {
                                     segment_count,
                                 },
                             );
+
+                            // Deferred work: history, analytics, notification (non-blocking)
+                            save_to_history(&state, &text, duration_ms);
+                            analytics::track("transcription_completed", serde_json::json!({
+                                "backend": format!("{:?}", config.transcription_backend),
+                                "duration_ms": duration_ms,
+                                "word_count": text.split_whitespace().count(),
+                                "char_count": text.chars().count(),
+                            }));
+                            {
+                                let app_notif = app.clone();
+                                let text_notif = text.clone();
+                                std::thread::spawn(move || {
+                                    send_notification(&app_notif, &text_notif);
+                                });
+                            }
 
                         }
                         Err(e) => log::error!("Transcription failed: {}", e),

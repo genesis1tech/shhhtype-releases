@@ -16,8 +16,8 @@ const VALIDATION_INTERVAL_SECS: i64 = 86400;
 /// Admin license keys — full access, never expire, no LemonSqueezy call.
 const ADMIN_KEY_PREFIX: &str = "ADMIN-";
 
-/// Beta license keys — validated locally, never expire, no LemonSqueezy call.
-const BETA_KEY_PREFIX: &str = "BETA-";
+/// LemonSqueezy product ID for the beta product.
+const BETA_PRODUCT_ID: u64 = 928696;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum LicenseStatus {
@@ -44,12 +44,21 @@ pub struct LicenseInfo {
     /// Last time the license was validated online (RFC 3339).
     #[serde(default)]
     pub last_validated: String,
+    /// LemonSqueezy product ID — used to distinguish beta vs paid licenses.
+    #[serde(default)]
+    pub product_id: u64,
+}
+
+#[derive(Deserialize)]
+struct LemonSqueezyMeta {
+    product_id: u64,
 }
 
 #[derive(Deserialize)]
 struct LemonSqueezyActivateResponse {
     activated: bool,
     instance: Option<LemonSqueezyInstance>,
+    meta: Option<LemonSqueezyMeta>,
     error: Option<String>,
 }
 
@@ -61,6 +70,7 @@ struct LemonSqueezyInstance {
 #[derive(Deserialize)]
 struct LemonSqueezyValidateResponse {
     valid: bool,
+    meta: Option<LemonSqueezyMeta>,
     error: Option<String>,
 }
 
@@ -123,44 +133,43 @@ fn is_valid_admin_key(key: &str) -> bool {
     suffix.len() == 32 && suffix.chars().all(|c| c.is_ascii_hexdigit())
 }
 
-/// Check if a license key is a valid beta key.
-/// Beta keys: BETA-<32 hex chars> — validated locally, never expire.
-fn is_valid_beta_key(key: &str) -> bool {
-    if !key.starts_with(BETA_KEY_PREFIX) {
-        return false;
-    }
-    let suffix = &key[BETA_KEY_PREFIX.len()..];
-    suffix.len() == 32 && suffix.chars().all(|c| c.is_ascii_hexdigit())
+/// Check if a key is admin (local-only, no LemonSqueezy).
+fn is_local_key(key: &str) -> bool {
+    is_valid_admin_key(key)
 }
 
-/// Check if a key is either admin or beta (local-only, no LemonSqueezy).
-fn is_local_key(key: &str) -> bool {
-    is_valid_admin_key(key) || is_valid_beta_key(key)
+/// Returns the license status for a given product_id.
+pub fn status_for_product(product_id: u64) -> LicenseStatus {
+    if product_id == BETA_PRODUCT_ID {
+        LicenseStatus::Beta
+    } else {
+        LicenseStatus::Licensed
+    }
 }
 
 fn license_path(data_dir: &Path) -> std::path::PathBuf {
     data_dir.join("license.json")
 }
 
-/// Activate a license key — beta keys are validated locally, others via LemonSqueezy.
+/// Activate a license key — admin keys validated locally, all others via LemonSqueezy.
 pub fn activate_license(key: &str, data_dir: &Path) -> Result<LicenseInfo> {
-    // Admin/beta keys: validate format locally, store in keychain, skip LemonSqueezy
+    // Admin keys: validate format locally, store in keychain, skip LemonSqueezy
     if is_local_key(key) {
-        let kind = if is_valid_admin_key(key) { "admin" } else { "beta" };
         let machine_id = get_machine_id();
         let now = chrono::Utc::now().to_rfc3339();
         let info = LicenseInfo {
             license_key: key.to_string(),
-            instance_id: format!("{}-{}", kind, &machine_id[..8]),
+            instance_id: format!("admin-{}", &machine_id[..8]),
             activated_at: now.clone(),
             machine_id,
             last_validated: now,
+            product_id: 0,
         };
         if let Err(e) = keychain::set_secret(KEYCHAIN_LICENSE_KEY, key) {
-            return Err(anyhow!("Failed to store {} key: {}", kind, e));
+            return Err(anyhow!("Failed to store admin key: {}", e));
         }
         save_license_metadata(data_dir, &info);
-        log::info!("{} license activated", kind);
+        log::info!("admin license activated");
         return Ok(info);
     }
 
@@ -195,6 +204,8 @@ pub fn activate_license(key: &str, data_dir: &Path) -> Result<LicenseInfo> {
     }
 
     let instance = response.instance.ok_or_else(|| anyhow!("No instance in response"))?;
+    let meta = response.meta.ok_or_else(|| anyhow!("No product metadata in activation response"))?;
+    let product_id = meta.product_id;
 
     let now = chrono::Utc::now().to_rfc3339();
     let info = LicenseInfo {
@@ -203,6 +214,7 @@ pub fn activate_license(key: &str, data_dir: &Path) -> Result<LicenseInfo> {
         activated_at: now.clone(),
         machine_id,
         last_validated: now,
+        product_id,
     };
 
     // Store license key securely in keychain
@@ -224,6 +236,7 @@ fn save_license_metadata(data_dir: &Path, info: &LicenseInfo) {
         activated_at: info.activated_at.clone(),
         machine_id: info.machine_id.clone(),
         last_validated: info.last_validated.clone(),
+        product_id: info.product_id,
     };
     if let Ok(content) = serde_json::to_string_pretty(&disk_info) {
         let _ = std::fs::write(license_path(data_dir), content);
@@ -235,13 +248,17 @@ fn save_license_metadata(data_dir: &Path, info: &LicenseInfo) {
 /// (prevents users from creating a fake local file).
 /// Returns Trial/TrialExpired if no license is activated.
 pub fn check_license(data_dir: &Path) -> LicenseStatus {
-    // Admin/beta keys stored in keychain bypass LemonSqueezy validation
+    // Admin keys stored in keychain bypass LemonSqueezy validation
     if let Some(key) = keychain::get_secret(KEYCHAIN_LICENSE_KEY) {
         if is_valid_admin_key(&key) {
             return LicenseStatus::Licensed;
         }
-        if is_valid_beta_key(&key) {
-            return LicenseStatus::Beta;
+        // Legacy local-only BETA-* keys are no longer valid — force re-activation
+        if key.starts_with("BETA-") {
+            log::warn!("Legacy BETA key found in keychain — requires re-activation via LemonSqueezy");
+            let _ = keychain::delete_secret(KEYCHAIN_LICENSE_KEY);
+            let _ = std::fs::remove_file(license_path(data_dir));
+            return trial_status(data_dir);
         }
     }
 
@@ -280,7 +297,14 @@ pub fn check_license(data_dir: &Path) -> LicenseStatus {
         return LicenseStatus::Invalid;
     }
 
-    LicenseStatus::Licensed
+    // product_id = 0 means activated before this change — treat as Licensed
+    // (the next 24h revalidation will refresh product_id from LemonSqueezy)
+    if info.product_id == 0 {
+        return LicenseStatus::Licensed;
+    }
+
+    // Distinguish beta vs paid by the product ID stored at activation
+    status_for_product(info.product_id)
 }
 
 /// Validate license online with LemonSqueezy.
@@ -288,7 +312,7 @@ pub fn check_license(data_dir: &Path) -> LicenseStatus {
 /// On failure (revoked/expired), removes local license and demotes to trial state.
 /// On network error, trusts the cached status (grace period).
 pub fn validate_license_online(data_dir: &Path) {
-    // Admin and beta keys don't need online validation
+    // Admin keys don't need online validation
     if let Some(key) = keychain::get_secret(KEYCHAIN_LICENSE_KEY) {
         if is_local_key(&key) {
             return;
@@ -365,6 +389,15 @@ pub fn validate_license_online(data_dir: &Path) {
                 if validation.valid {
                     log::info!("License validated successfully");
                     info.last_validated = chrono::Utc::now().to_rfc3339();
+                    // Refresh product_id from server (handles product migrations)
+                    if let Some(meta) = validation.meta {
+                        if info.product_id != meta.product_id {
+                            log::info!("Updating product_id: {} → {}", info.product_id, meta.product_id);
+                        }
+                        info.product_id = meta.product_id;
+                    } else {
+                        log::debug!("Validation response missing meta — preserving existing product_id");
+                    }
                     save_license_metadata(data_dir, &info);
                 } else {
                     log::warn!(
