@@ -36,6 +36,7 @@ No test suite exists. Verify changes manually via `npm run tauri dev`.
 3. VAD monitor (`vad/energy.rs`) emits audio-level events to Overlay every 50ms
 4. On stop → `do_stop_and_transcribe()` in `commands.rs`:
    - Zero-copy buffer swap (takes entire Vec, leaves empty Vec behind)
+   - Audio boost: peak normalization + soft compression (`audio/normalize.rs`) — enabled by default
    - Resample to 16kHz via rubato SincFixedIn (`audio/resampler.rs`)
    - Route to local Whisper (`transcribe/engine.rs`) or Groq cloud (`transcribe/groq.rs`)
    - Apply dictionary corrections (`transcribe/dictionary.rs`)
@@ -50,17 +51,17 @@ No test suite exists. Verify changes manually via `npm run tauri dev`.
 
 ### Composition Buffer & AI Rewrite
 
-`state.rs` holds a `CompositionBuffer` — multi-segment accumulation of recent transcriptions (TTL 30min, max 20 entries). Tracks total injected character count. When rewrite is triggered (`rewrite.rs`), it:
-1. Sends accumulated text to Groq Llama 3.3 70B with style prompt (Professional/Casual/Concise/Friendly)
-2. Simulates backspace keystrokes to delete the exact character count
-3. Injects rewritten text
+`state.rs` holds a `CompositionBuffer` — multi-segment accumulation of recent transcriptions (TTL 90s, max 20 entries). Tracks total injected character count. When rewrite is triggered (`rewrite.rs`), it:
+1. Checks for skill triggers in the accumulated text (`skills.rs`)
+2. Sends text to Groq Qwen3 32B with style prompt (Professional/Casual/Concise/Friendly) or skill-specific system prompt
+3. Selects back the exact injected character count and replaces with rewritten text
 4. Clears the buffer
 
 ### Window Management
 
 Tray-only app — `tauri.conf.json` has `windows: []`, all windows created dynamically.
 
-- **Overlay:** NSWindow swizzled to NSPanel at runtime (`windows.rs`) to render above full-screen Spaces. Window level 101 (NSPopUpMenuWindowLevel). Repositions to cursor's active monitor on each show. Click-through by default, toggles to interactive for rewrite prompt.
+- **Overlay:** NSWindow swizzled to NSPanel at runtime (`windows.rs`) to render above full-screen Spaces. Window level 1001 (above all apps including terminals). Repositions to cursor's active monitor on each show. Click-through by default, toggles to interactive for rewrite prompt. Warmed up on startup (brief show/hide) to prevent focus theft on first use.
 - **Settings:** Created on first tray menu click, reused on subsequent opens.
 - **Welcome:** First-launch onboarding (permission requests, model download).
 
@@ -90,9 +91,18 @@ Tray-only app — `tauri.conf.json` has `windows: []`, all windows created dynam
 └── models/             # Downloaded Whisper .bin files
 ```
 
+### Skills System
+
+Rewrite skills are `.md` files with YAML frontmatter loaded from `{data_dir}/skills/`. Each skill defines a trigger (e.g., `/kennedy`), optional aliases, and a system prompt that replaces the default rewrite style. Skills are detected in transcription text at both start and end positions. Built-in skills are copied from `src-tauri/skills/` on first launch via `ensure_default_skills()`. Loaded into `AppState.skills` at startup. Skills tab in Settings shows all loaded skills.
+
+### Analytics & Updates
+
+- `analytics.rs` — event tracking (app launch, transcription, rewrite, skill usage)
+- `update.rs` — background GitHub release check on startup, emits `update-available` event, surfaces in tray menu
+
 ## Commercial Features
 
-- **Licensing:** LemonSqueezy integration in `license.rs`. Machine ID derived from hashed macOS hardware UUID.
+- **Licensing:** LemonSqueezy integration in `license.rs`. 7-day trial with Keychain-stored start date (anti-tamper). Online validation every 24h. All features blocked on expiry. Machine ID derived from hashed macOS hardware UUID.
 - **Groq usage tracking:** Rate limit headers parsed from API responses, displayed in Settings > License tab.
 
 ## macOS Permissions

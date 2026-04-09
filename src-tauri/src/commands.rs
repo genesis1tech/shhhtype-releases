@@ -50,6 +50,18 @@ pub fn do_start_recording(state: &Arc<AppState>, app: Option<AppHandle>) -> Resu
         return Err("Already recording".into());
     }
 
+    // Stale-state recovery: if a previous transcription thread panicked or hung,
+    // the recording_state may be stuck at RECORDING or TRANSCRIBING even though
+    // no audio thread is running. Reset to IDLE so the user can record again.
+    let current = state.recording_state.load(Ordering::Relaxed);
+    if current != STATE_IDLE {
+        log::warn!(
+            "Stale recording state detected (state={}, no audio thread) — resetting to idle",
+            current
+        );
+        state.set_state(STATE_IDLE);
+    }
+
     // Check microphone permission before attempting to record
     if !check_microphone_permission() {
         log::error!("Microphone permission not granted — cannot record");
@@ -184,11 +196,18 @@ pub fn do_start_recording(state: &Arc<AppState>, app: Option<AppHandle>) -> Resu
 }
 
 /// Stop recording and transcribe. Shared by both the Tauri command and the hotkey handler.
+/// Resets state to IDLE on all exit paths (success or error). Caller should additionally
+/// use `catch_unwind` if running from a spawned thread to handle panics.
 pub fn do_stop_and_transcribe(state: &Arc<AppState>) -> Result<String, String> {
     state.audio_stop_flag.store(true, Ordering::Relaxed);
 
     if let Some(handle) = state.audio_thread.lock().take() {
-        handle.join().map_err(|_| "Audio thread panicked")?;
+        if let Err(_) = handle.join() {
+            log::error!("Audio thread panicked — resetting state to idle");
+            state.set_state(STATE_IDLE);
+            *state.recording_started_at.lock() = None;
+            return Err("Audio thread panicked".into());
+        }
     }
 
     let sample_rate = state.audio_sample_rate.load(Ordering::Relaxed);
@@ -241,64 +260,68 @@ pub fn do_stop_and_transcribe(state: &Arc<AppState>) -> Result<String, String> {
         crate::audio::normalize::normalize_audio(&mut samples);
     }
 
-    let transcribed_text = match config.transcription_backend {
-        TranscriptionBackend::Cloud => {
-            // Cloud transcription is a premium feature — require a valid license
-            if let Err(e) = require_license(&state.data_dir) {
-                state.set_state(STATE_IDLE);
-                return Err(e);
-            }
-            let api_key = config.groq_api_key.as_deref().unwrap_or("");
-            if api_key.is_empty() {
-                state.set_state(STATE_IDLE);
-                return Err("Groq API key not set. Configure it in Settings > General.".into());
-            }
-            // Downsample to 16kHz before uploading — cuts WAV size by ~3x (48kHz→16kHz)
-            // which significantly reduces upload time. Groq accepts any sample rate.
-            let (upload_samples, upload_rate) = if sample_rate > 16000 {
-                let resample_start = Instant::now();
-                let resampled = resample_to_16khz(&samples, sample_rate)
-                    .map_err(|e| format!("Resampling failed: {}", e))?;
-                log::info!("Cloud resample {}Hz→16kHz ({} → {} samples) in {:?}",
-                    sample_rate, samples.len(), resampled.len(), resample_start.elapsed());
-                (resampled, 16000u32)
-            } else {
-                (samples, sample_rate)
-            };
-            log::info!("Transcribing via Groq cloud (sending {}Hz)...", upload_rate);
-            crate::transcribe::groq::transcribe(&upload_samples, upload_rate, &config.language, api_key, Some(&state.groq_usage))
-                .map_err(|e| format!("Cloud transcription failed: {}", e))?
-        }
-        TranscriptionBackend::Local => {
-            // Local Whisper requires 16kHz — resample if needed
-            let resample_start = Instant::now();
-            let samples_16k = resample_to_16khz(&samples, sample_rate)
-                .map_err(|e| format!("Resampling failed: {}", e))?;
-            log::info!("Resampled to {} samples at 16kHz in {:?}", samples_16k.len(), resample_start.elapsed());
-
-            {
-                let mut engine = state.whisper_engine.lock();
-                if !engine.is_loaded() {
-                    let model_path = model::model_path(&state.data_dir, &config.model_size);
-                    if !model_path.exists() {
-                        state.set_state(STATE_IDLE);
-                        return Err(format!(
-                            "Model not found: {}. Please download a model first.",
-                            model_path.display()
-                        ));
-                    }
-                    log::info!("Loading whisper model: {}", model_path.display());
-                    engine
-                        .load_model(&model_path)
-                        .map_err(|e| format!("Failed to load model: {}", e))?;
+    // Run transcription — reset state to IDLE on any error so the app never gets stuck.
+    let transcribed_text = match (|| -> Result<String, String> {
+        match config.transcription_backend {
+            TranscriptionBackend::Cloud => {
+                // Cloud transcription is a premium feature — require a valid license
+                require_license(&state.data_dir)?;
+                let api_key = config.groq_api_key.as_deref().unwrap_or("");
+                if api_key.is_empty() {
+                    return Err("Groq API key not set. Configure it in Settings > General.".into());
                 }
+                // Downsample to 16kHz before uploading — cuts WAV size by ~3x (48kHz→16kHz)
+                // which significantly reduces upload time. Groq accepts any sample rate.
+                let (upload_samples, upload_rate) = if sample_rate > 16000 {
+                    let resample_start = Instant::now();
+                    let resampled = resample_to_16khz(&samples, sample_rate)
+                        .map_err(|e| format!("Resampling failed: {}", e))?;
+                    log::info!("Cloud resample {}Hz→16kHz ({} → {} samples) in {:?}",
+                        sample_rate, samples.len(), resampled.len(), resample_start.elapsed());
+                    (resampled, 16000u32)
+                } else {
+                    (samples, sample_rate)
+                };
+                log::info!("Transcribing via Groq cloud (sending {}Hz)...", upload_rate);
+                crate::transcribe::groq::transcribe(&upload_samples, upload_rate, &config.language, api_key, Some(&state.groq_usage))
+                    .map_err(|e| format!("Cloud transcription failed: {}", e))
             }
+            TranscriptionBackend::Local => {
+                // Local Whisper requires 16kHz — resample if needed
+                let resample_start = Instant::now();
+                let samples_16k = resample_to_16khz(&samples, sample_rate)
+                    .map_err(|e| format!("Resampling failed: {}", e))?;
+                log::info!("Resampled to {} samples at 16kHz in {:?}", samples_16k.len(), resample_start.elapsed());
 
-            state
-                .whisper_engine
-                .lock()
-                .transcribe(&samples_16k, &config.language)
-                .map_err(|e| format!("Transcription failed: {}", e))?
+                {
+                    let mut engine = state.whisper_engine.lock();
+                    if !engine.is_loaded() {
+                        let model_path = model::model_path(&state.data_dir, &config.model_size);
+                        if !model_path.exists() {
+                            return Err(format!(
+                                "Model not found: {}. Please download a model first.",
+                                model_path.display()
+                            ));
+                        }
+                        log::info!("Loading whisper model: {}", model_path.display());
+                        engine
+                            .load_model(&model_path)
+                            .map_err(|e| format!("Failed to load model: {}", e))?;
+                    }
+                }
+
+                state
+                    .whisper_engine
+                    .lock()
+                    .transcribe(&samples_16k, &config.language)
+                    .map_err(|e| format!("Transcription failed: {}", e))
+            }
+        }
+    })() {
+        Ok(text) => text,
+        Err(e) => {
+            state.set_state(STATE_IDLE);
+            return Err(e);
         }
     };
 

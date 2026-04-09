@@ -296,80 +296,98 @@ pub fn register_hotkey(app: &tauri::AppHandle, shortcut_str: &str) {
                 let app = app_handle.clone();
                 let state = Arc::clone(state.inner());
                 std::thread::spawn(move || {
-                    let duration_ms = commands::get_recording_duration_ms(&state);
-                    let _ = app.emit("recording-state-changed", "transcribing");
-                    match commands::do_stop_and_transcribe(&state) {
-                        Ok(text)
-                            if !text.is_empty() && text != "[BLANK_AUDIO]" =>
-                        {
-                            let config = state.config.read().clone();
-                            if config.sound_feedback {
-                                sound::play_stop_sound();
-                            }
-
-                            // Inject text FIRST — minimize latency between transcription and text appearing
-                            // History, analytics, and notification are deferred to after injection.
-                            let injection_ok = match config.injection_method {
-                                InjectionMethod::Clipboard => {
-                                    inject::clipboard::inject_via_clipboard(&text)
-                                }
-                                InjectionMethod::Keyboard => {
-                                    let res = inject::keyboard::inject_via_keyboard(&text);
-                                    // Auto-copy to clipboard when using keyboard injection
-                                    if config.auto_copy {
-                                        if let Err(e) = inject::clipboard::copy_to_clipboard(&text) {
-                                            log::error!("Auto-copy failed: {}", e);
-                                        }
-                                    }
-                                    res
-                                }
-                            };
-
-                            // Only stage composition after injection succeeds
-                            if injection_ok.is_ok() {
-                                *state.last_transcription.lock() = Some(text.clone());
-                                state.composition.lock().append(text.clone(), config.injection_method.clone());
-                            } else {
-                                let err = injection_ok.unwrap_err();
-                                log::error!("Text injection failed: {}", err);
-                                // Notify frontend that text was only copied, not injected
-                                let _ = app.emit("injection-copy-only", err.to_string());
-                            }
-
-                            let segment_count = state.composition.lock().len();
-                            if config.rewrite_enabled {
-                                tray::setup::update_tray_segment_count(&app, segment_count);
-                            }
-                            let _ = app.emit(
-                                "transcription-complete",
-                                commands::TranscriptionCompletePayload {
-                                    text: text.clone(),
-                                    segment_count,
-                                },
-                            );
-
-                            // Deferred work: history, analytics, notification (non-blocking)
-                            save_to_history(&state, &text, duration_ms);
-                            analytics::track("transcription_completed", serde_json::json!({
-                                "backend": format!("{:?}", config.transcription_backend),
-                                "duration_ms": duration_ms,
-                                "word_count": text.split_whitespace().count(),
-                                "char_count": text.chars().count(),
-                            }));
+                    // Wrap the entire transcription pipeline in catch_unwind so that
+                    // a panic anywhere (whisper crash, injection failure, etc.) cannot
+                    // leave the app stuck in a non-idle state.
+                    let app_recovery = app.clone();
+                    let state_recovery = Arc::clone(&state);
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        let duration_ms = commands::get_recording_duration_ms(&state);
+                        let _ = app.emit("recording-state-changed", "transcribing");
+                        match commands::do_stop_and_transcribe(&state) {
+                            Ok(text)
+                                if !text.is_empty() && text != "[BLANK_AUDIO]" =>
                             {
-                                let app_notif = app.clone();
-                                let text_notif = text.clone();
-                                std::thread::spawn(move || {
-                                    send_notification(&app_notif, &text_notif);
-                                });
-                            }
+                                let config = state.config.read().clone();
+                                if config.sound_feedback {
+                                    sound::play_stop_sound();
+                                }
 
+                                // Inject text FIRST — minimize latency between transcription and text appearing
+                                // History, analytics, and notification are deferred to after injection.
+                                let injection_ok = match config.injection_method {
+                                    InjectionMethod::Clipboard => {
+                                        inject::clipboard::inject_via_clipboard(&text)
+                                    }
+                                    InjectionMethod::Keyboard => {
+                                        let res = inject::keyboard::inject_via_keyboard(&text);
+                                        // Auto-copy to clipboard when using keyboard injection
+                                        if config.auto_copy {
+                                            if let Err(e) = inject::clipboard::copy_to_clipboard(&text) {
+                                                log::error!("Auto-copy failed: {}", e);
+                                            }
+                                        }
+                                        res
+                                    }
+                                };
+
+                                // Only stage composition after injection succeeds
+                                if injection_ok.is_ok() {
+                                    *state.last_transcription.lock() = Some(text.clone());
+                                    state.composition.lock().append(text.clone(), config.injection_method.clone());
+                                } else {
+                                    let err = injection_ok.unwrap_err();
+                                    log::error!("Text injection failed: {}", err);
+                                    // Notify frontend that text was only copied, not injected
+                                    let _ = app.emit("injection-copy-only", err.to_string());
+                                }
+
+                                let segment_count = state.composition.lock().len();
+                                if config.rewrite_enabled {
+                                    tray::setup::update_tray_segment_count(&app, segment_count);
+                                }
+                                let _ = app.emit(
+                                    "transcription-complete",
+                                    commands::TranscriptionCompletePayload {
+                                        text: text.clone(),
+                                        segment_count,
+                                    },
+                                );
+
+                                // Deferred work: history, analytics, notification (non-blocking)
+                                save_to_history(&state, &text, duration_ms);
+                                analytics::track("transcription_completed", serde_json::json!({
+                                    "backend": format!("{:?}", config.transcription_backend),
+                                    "duration_ms": duration_ms,
+                                    "word_count": text.split_whitespace().count(),
+                                    "char_count": text.chars().count(),
+                                }));
+                                {
+                                    let app_notif = app.clone();
+                                    let text_notif = text.clone();
+                                    std::thread::spawn(move || {
+                                        send_notification(&app_notif, &text_notif);
+                                    });
+                                }
+
+                            }
+                            Err(e) => log::error!("Transcription failed: {}", e),
+                            _ => {}
                         }
-                        Err(e) => log::error!("Transcription failed: {}", e),
-                        _ => {}
+                        let _ = app.emit("recording-state-changed", "idle");
+                        windows::hide_overlay(&app);
+                    }));
+
+                    // If the closure panicked, guarantee state recovery so the app
+                    // doesn't freeze and the user can record again.
+                    if result.is_err() {
+                        log::error!("Transcription thread panicked — recovering state");
+                        state_recovery.set_state(state::STATE_IDLE);
+                        *state_recovery.audio_thread.lock() = None;
+                        *state_recovery.recording_started_at.lock() = None;
+                        let _ = app_recovery.emit("recording-state-changed", "idle");
+                        windows::hide_overlay(&app_recovery);
                     }
-                    let _ = app.emit("recording-state-changed", "idle");
-                    windows::hide_overlay(&app);
                 });
             }
         },
@@ -421,78 +439,89 @@ pub fn register_rewrite_hotkey(app: &tauri::AppHandle, shortcut_str: &str) {
             // Bump generation to invalidate any pending 3s hide timer from recording
             state.overlay_generation.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             std::thread::spawn(move || {
-                let _ = app.emit("recording-state-changed", "transcribing");
-                windows::show_overlay(&app, inline);
-                let _ = app.emit("rewrite-started", ());
+                let app_recovery = app.clone();
+                let state_recovery = Arc::clone(&state);
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    let _ = app.emit("recording-state-changed", "transcribing");
+                    windows::show_overlay(&app, inline);
+                    let _ = app.emit("rewrite-started", ());
 
-                // Read from composition buffer; fall back to last_transcription
-                let (text, is_multi, segment_count) = {
-                    let buf = state.composition.lock();
-                    if buf.len() == 0 {
-                        let last = state.last_transcription.lock().clone().unwrap_or_default();
-                        (last, false, 1usize)
-                    } else {
-                        (buf.join(), buf.is_multi(), buf.len())
-                    }
-                };
-                let config = state.config.read().clone();
+                    // Read from composition buffer; fall back to last_transcription
+                    let (text, is_multi, segment_count) = {
+                        let buf = state.composition.lock();
+                        if buf.len() == 0 {
+                            let last = state.last_transcription.lock().clone().unwrap_or_default();
+                            (last, false, 1usize)
+                        } else {
+                            (buf.join(), buf.is_multi(), buf.len())
+                        }
+                    };
+                    let config = state.config.read().clone();
 
-                // Read injected char count for selection-based replacement
-                let char_count = {
-                    let buf = state.composition.lock();
-                    if buf.len() == 0 {
-                        text.chars().count()
-                    } else {
-                        buf.injected_chars()
-                    }
-                };
+                    // Read injected char count for selection-based replacement
+                    let char_count = {
+                        let buf = state.composition.lock();
+                        if buf.len() == 0 {
+                            text.chars().count()
+                        } else {
+                            buf.injected_chars()
+                        }
+                    };
 
-                // Check for skill trigger in the text
-                let (rewrite_text_input, custom_prompt) = {
-                    let skills = state.skills.lock();
-                    match skills::detect_skill(&text, &skills) {
-                        Some(skill_match) => {
-                            log::info!("Skill detected: {}", skill_match.skill.name);
-                            analytics::track("skill_used", serde_json::json!({
-                                "skill_name": skill_match.skill.name,
+                    // Check for skill trigger in the text
+                    let (rewrite_text_input, custom_prompt) = {
+                        let skills = state.skills.lock();
+                        match skills::detect_skill(&text, &skills) {
+                            Some(skill_match) => {
+                                log::info!("Skill detected: {}", skill_match.skill.name);
+                                analytics::track("skill_used", serde_json::json!({
+                                    "skill_name": skill_match.skill.name,
+                                }));
+                                (skill_match.cleaned_text, Some(skill_match.skill.system_prompt))
+                            }
+                            None => (text.clone(), None),
+                        }
+                    };
+
+                    match rewrite::rewrite_text(&rewrite_text_input, &config.rewrite_style, config.groq_api_key.as_deref().unwrap_or(""), Some(&state.groq_usage), custom_prompt.as_deref(), config.skill_formatting) {
+                        Ok(rewritten) => {
+                            log::info!("Rewrite complete (multi={}, chars={}): {}", is_multi, char_count, rewritten);
+                            analytics::track("rewrite_completed", serde_json::json!({
+                                "style": format!("{:?}", config.rewrite_style),
+                                "has_skill": custom_prompt.is_some(),
                             }));
-                            (skill_match.cleaned_text, Some(skill_match.skill.system_prompt))
+
+                            // Select-back and replace the original injected text
+                            if let Err(e) = commands::select_back_and_inject(char_count, &rewritten) {
+                                log::error!("Rewrite injection failed, falling back to clipboard: {}", e);
+                                let _ = crate::inject::clipboard::copy_to_clipboard(&rewritten);
+                                let _ = app.emit("rewrite-fallback", "Copied to clipboard");
+                            }
+
+                            // Clear composition buffer and last_transcription to prevent re-rewriting
+                            state.composition.lock().clear();
+                            *state.last_transcription.lock() = None;
+                            tray::setup::update_tray_segment_count(&app, 0);
+                            let _ = app.emit("rewrite-complete", &rewritten);
                         }
-                        None => (text.clone(), None),
-                    }
-                };
-
-                match rewrite::rewrite_text(&rewrite_text_input, &config.rewrite_style, config.groq_api_key.as_deref().unwrap_or(""), Some(&state.groq_usage), custom_prompt.as_deref(), config.skill_formatting) {
-                    Ok(rewritten) => {
-                        log::info!("Rewrite complete (multi={}, chars={}): {}", is_multi, char_count, rewritten);
-                        analytics::track("rewrite_completed", serde_json::json!({
-                            "style": format!("{:?}", config.rewrite_style),
-                            "has_skill": custom_prompt.is_some(),
-                        }));
-
-                        // Select-back and replace the original injected text
-                        if let Err(e) = commands::select_back_and_inject(char_count, &rewritten) {
-                            log::error!("Rewrite injection failed, falling back to clipboard: {}", e);
-                            let _ = crate::inject::clipboard::copy_to_clipboard(&rewritten);
-                            let _ = app.emit("rewrite-fallback", "Copied to clipboard");
+                        Err(e) => {
+                            log::error!("Rewrite failed: {}", e);
+                            let _ = app.emit("rewrite-error", e.to_string());
                         }
+                    }
 
-                        // Clear composition buffer and last_transcription to prevent re-rewriting
-                        state.composition.lock().clear();
-                        *state.last_transcription.lock() = None;
-                        tray::setup::update_tray_segment_count(&app, 0);
-                        let _ = app.emit("rewrite-complete", &rewritten);
-                    }
-                    Err(e) => {
-                        log::error!("Rewrite failed: {}", e);
-                        let _ = app.emit("rewrite-error", e.to_string());
-                    }
+                    let _ = app.emit("recording-state-changed", "idle");
+                    // Brief delay before hiding overlay so user sees result
+                    std::thread::sleep(std::time::Duration::from_millis(1500));
+                    windows::hide_overlay(&app);
+                }));
+
+                if result.is_err() {
+                    log::error!("Rewrite thread panicked — recovering state");
+                    state_recovery.set_state(state::STATE_IDLE);
+                    let _ = app_recovery.emit("recording-state-changed", "idle");
+                    windows::hide_overlay(&app_recovery);
                 }
-
-                let _ = app.emit("recording-state-changed", "idle");
-                // Brief delay before hiding overlay so user sees result
-                std::thread::sleep(std::time::Duration::from_millis(1500));
-                windows::hide_overlay(&app);
             });
         },
     ) {
